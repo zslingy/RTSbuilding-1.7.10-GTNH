@@ -1,0 +1,21 @@
+{
+    "modListVersion": 2,
+    "modList": [{
+        "modid": "${modId}",
+        "name": "${modName}",
+        "description": "RTS Building: Build From Above — RTS-style top-down building mod for Minecraft. Place and break blocks from a bird's-eye view, link storage containers, and manage build projects with blueprints and skill progression.",
+        "version": "${modVersion}",
+        "mcversion": "${minecraftVersion}",
+        "url": "https://github.com/Hcrab/RTSbuilding",
+        "updateUrl": "",
+        "authorList": ["JerryLunar", "H-crab"],
+        "credits": "五世桃花亭 - Long-term programming contributor, architecture cleanup, and UI design",
+        "logoFile": "",
+        "screenshots": [],
+        "parent": "",
+        "requiredMods": [],
+        "dependencies": [],
+        "dependants": [],
+        "useDependencyInformation": true
+    }]
+}

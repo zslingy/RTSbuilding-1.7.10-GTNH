@@ -1,0 +1,13 @@
+{
+  "required": true,
+  "package": "com.rtsbuilding.rtsbuilding.mixin",
+  "compatibilityLevel": "JAVA_8",
+  "refmap": "mixins.rtsbuilding.refmap.json",
+  "client": [],
+  "mixins": [
+    "ChestMenuMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

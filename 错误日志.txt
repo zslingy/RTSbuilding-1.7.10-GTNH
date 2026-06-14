@@ -1,0 +1,46 @@
+F:\McMod\RTSbuilding-1.7.10-port>gradlew build
+Starting a Gradle Daemon, 4 busy Daemons could not be reused, use --status for details
+
+> Configure project :
+This mod must be version controlled by Git AND the repository must provide at least one Git tag,
+or the VERSION override must be set! (Do NOT download from GitHub using the ZIP option, instead
+clone the repository, see https://gtnh.miraheze.org/wiki/Development for details.
+
+If you don't want Git-based versioning, you can also replace it with a custom mechanism by setting
+gtnh.modules.gitVersion = false
+in your project's gradle.properties file, and populating project.ext.modVersion with a valid string in your buildscript.
+
+Version override set to NO-GIT-TAG-SET!
+You might want to check out './gradlew :faq' if your build fails.
+Build script update from 2.0.20 to 2.0.25 available! Run ./gradlew updateBuildScript
+Recommend replacing '4.19.0' with '4.19' for Eclipse JDT
+'indentWithSpaces' is deprecated, use 'leadingTabsToSpaces' in your gradle build script instead.
+'indentWithSpaces' is deprecated, use 'leadingTabsToSpaces' in your gradle build script instead.
+
+> Task :compileJava
+Jabel: initialized
+F:\McMod\RTSbuilding-1.7.10-port\src\main\java\com\rtsbuilding\rtsbuilding\server\RtsStorageManager.java:139: 閿欒: 闈炴硶鐨勮〃杈惧紡寮€濮?[0K
+    public static void clearAll() {
+    ^
+1 涓敊璇?
+<=
+> Task :compileJava FAILED
+1B
+[Incubating] Problems report is available at: file:///F:/McMod/RTSbuilding-1.7.10-port/build/reports/problems/problems-report.html
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':compileJava'.
+> Compilation failed; see the compiler output below.
+  F:\McMod\RTSbuilding-1.7.10-port\src\main\java\com\rtsbuilding\rtsbuilding\server\RtsStorageManager.java:139: 閿欒: 闈炴硶鐨勮〃杈惧紡寮€濮?
+      public static void clearAll() {
+      ^
+  1 涓敊璇?
+
+* Try:
+> Check your code and dependencies to fix the compilation error(s)
+> Run n with --scan to get full insights from a Build Scan (powered by Develocity).
+
+BUILD FAILED in 16s
+9 actionable tasks: 1 executed, 8 up-to-dat

@@ -93,26 +93,29 @@ public class C2SRtsLinkedPickupMessage implements IMessage {
                         }
                     }
                 } else if (session.isContainerLinked()) {
-                    TileEntity te = player.worldObj
-                        .getTileEntity(session.getContainerX(), session.getContainerY(), session.getContainerZ());
-                    if (te instanceof net.minecraft.inventory.IInventory) {
-                        net.minecraft.inventory.IInventory inv = (net.minecraft.inventory.IInventory) te;
-                        // 从容器提取一个物品到背包
-                        for (int ci = 0; ci < inv.getSizeInventory() && ci < 256; ci++) {
-                            ItemStack containerStack = inv.getStackInSlot(ci);
-                            if (containerStack == null || containerStack.getItem() == null) continue;
-                            ItemStack picked = containerStack.splitStack(1);
-                            if (player.inventory.addItemStackToInventory(picked)) {
-                                if (containerStack.stackSize <= 0) {
-                                    inv.setInventorySlotContents(ci, null);
+                    boolean picked = false;
+                    for (com.rtsbuilding.rtsbuilding.server.storage.LinkedStorageRef ref : session
+                        .getLinkedStorages()) {
+                        TileEntity te = player.worldObj.getTileEntity(ref.x, ref.y, ref.z);
+                        if (te instanceof net.minecraft.inventory.IInventory) {
+                            net.minecraft.inventory.IInventory inv = (net.minecraft.inventory.IInventory) te;
+                            for (int ci = 0; ci < inv.getSizeInventory() && ci < 256; ci++) {
+                                ItemStack containerStack = inv.getStackInSlot(ci);
+                                if (containerStack == null || containerStack.getItem() == null) continue;
+                                ItemStack containerPicked = containerStack.splitStack(1);
+                                if (player.inventory.addItemStackToInventory(containerPicked)) {
+                                    if (containerStack.stackSize <= 0) {
+                                        inv.setInventorySlotContents(ci, null);
+                                    }
+                                    inv.markDirty();
+                                    player.inventory.markDirty();
+                                    picked = true;
+                                    break;
+                                } else {
+                                    containerStack.stackSize++;
                                 }
-                                inv.markDirty();
-                                player.inventory.markDirty();
-                                break;
-                            } else {
-                                containerStack.stackSize++;
-                                break;
                             }
+                            if (picked) break;
                         }
                     }
                 }

@@ -186,6 +186,7 @@ screen.rtsbuilding.quick_build.mode_destroy=范围破坏
 screen.rtsbuilding.quick_build.shape=形状
 screen.rtsbuilding.quick_build.fill=填充
 screen.rtsbuilding.quick_build.rotation=旋转
+screen.rtsbuilding.quick_build.cylinder=圆柱
 screen.rtsbuilding.quick_build.materials=材料：%s 个方块
 screen.rtsbuilding.quick_build.destroy_hint=右键设 A/B，滚轮调高，再右键确认
 screen.rtsbuilding.ultimine.title=快速破坏

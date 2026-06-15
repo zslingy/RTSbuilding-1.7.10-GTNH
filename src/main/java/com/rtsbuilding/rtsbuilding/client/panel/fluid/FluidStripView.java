@@ -2,15 +2,23 @@ package com.rtsbuilding.rtsbuilding.client.panel.fluid;
 
 import java.awt.Rectangle;
 
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.FontRenderer;
 import net.minecraft.client.gui.Gui;
 import net.minecraft.client.gui.GuiScreen;
+import net.minecraft.client.renderer.RenderHelper;
+import net.minecraft.client.renderer.entity.RenderItem;
+import net.minecraft.item.ItemStack;
+
+import org.lwjgl.opengl.GL11;
 
 import com.rtsbuilding.rtsbuilding.client.RtsClientState;
 import com.rtsbuilding.rtsbuilding.client.RtsScreen;
 import com.rtsbuilding.rtsbuilding.client.StorageViewModel;
 import com.rtsbuilding.rtsbuilding.client.panel.IRtsPanel;
 import com.rtsbuilding.rtsbuilding.client.panel.RtsBottomPanel;
+
+import cpw.mods.fml.common.registry.GameData;
 
 /**
  * 流体面板视图 — 2列流体网格，显示存储中的流体。
@@ -19,10 +27,11 @@ import com.rtsbuilding.rtsbuilding.client.panel.RtsBottomPanel;
 public class FluidStripView implements IRtsPanel {
 
     private static final String PANEL_NAME = "fluid_strip";
-    private static final int SLOT_SIZE = 18;
+    private static final int SLOT_SIZE = 9;
     private static final int FLUID_COLS = 2;
 
     private final RtsClientState state;
+    private final RenderItem renderItem = new RenderItem();
     private int stripX, stripY, stripW, stripH;
 
     public FluidStripView() {
@@ -62,6 +71,7 @@ public class FluidStripView implements IRtsPanel {
         if (!isVisible()) return;
 
         FontRenderer fr = screen.mc.fontRenderer;
+        Minecraft mc = screen.mc;
 
         // 从 RtsBottomPanel 获取坐标（流体条在存储网格左侧）
         RtsBottomPanel bp = findBottomPanel(screen);
@@ -86,8 +96,56 @@ public class FluidStripView implements IRtsPanel {
         // 标签
         fr.drawString("Fluids", stripX, stripY - 12, 0xFFCCCC44);
 
-        // 桩：无实际流体数据时显示空条
-        fr.drawString("(no\nfluid\n data)", stripX + 2, stripY + stripH / 2 - 12, 0xFF666666);
+        // 修复: 从存储条目中筛选流体物品并渲染
+        java.util.List<StorageViewModel.StorageEntry> fluidEntries = new java.util.ArrayList<>();
+        for (StorageViewModel.StorageEntry e : state.storage.entries) {
+            if (e != null && e.itemId != null && isFluidItem(e.itemId)) {
+                fluidEntries.add(e);
+            }
+        }
+
+        if (fluidEntries.isEmpty()) {
+            fr.drawString("(no fluid)", stripX + 2, stripY + stripH / 2 - 4, 0xFF666666);
+            return;
+        }
+
+        // 渲染流体物品网格
+        int rows = Math.min(fluidEntries.size() / FLUID_COLS + 1, stripH / SLOT_SIZE);
+        for (int i = 0; i < fluidEntries.size() && i < FLUID_COLS * rows; i++) {
+            int col = i % FLUID_COLS;
+            int row = i / FLUID_COLS;
+            int sx = stripX + col * SLOT_SIZE;
+            int sy = stripY + row * SLOT_SIZE;
+
+            // 槽位背景
+            Gui.drawRect(sx, sy, sx + SLOT_SIZE, sy + SLOT_SIZE, 0x88444444);
+
+            // 物品图标
+            ItemStack stack = resolveStack(fluidEntries.get(i));
+            if (stack != null) {
+                GL11.glPushMatrix();
+                GL11.glEnable(GL11.GL_BLEND);
+                RenderHelper.enableGUIStandardItemLighting();
+                renderItem.renderItemAndEffectIntoGUI(fr, mc.renderEngine, stack, sx + 1, sy + 1);
+                renderItem.renderItemOverlayIntoGUI(fr, mc.renderEngine, stack, sx + 1, sy + 1);
+                RenderHelper.disableStandardItemLighting();
+                GL11.glDisable(GL11.GL_BLEND);
+                GL11.glPopMatrix();
+            }
+        }
+    }
+
+    private ItemStack resolveStack(StorageViewModel.StorageEntry entry) {
+        if (entry == null || entry.itemId == null) return null;
+        try {
+            net.minecraft.util.ResourceLocation rl = new net.minecraft.util.ResourceLocation(entry.itemId);
+            net.minecraft.item.Item item = (net.minecraft.item.Item) GameData.getItemRegistry()
+                .getObject(rl);
+            if (item == null) return null;
+            return new ItemStack(item, 1, entry.meta);
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     @Override

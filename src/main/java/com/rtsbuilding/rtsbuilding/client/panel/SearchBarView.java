@@ -24,10 +24,10 @@ import com.rtsbuilding.rtsbuilding.network.storage.C2SRtsRequestStoragePageMessa
  */
 public class SearchBarView {
 
-    public static final int SEARCH_BAR_H = 14;
-    public static final int SEARCH_BAR_GAP = 4;
-    private static final int CLEAR_BTN_W = 14;
-    private static final int PAGER_W = 60;
+    public static final int SEARCH_BAR_H = 7;
+    public static final int SEARCH_BAR_GAP = 2;
+    private static final int CLEAR_BTN_W = 7;
+    private static final int PAGER_W = 30;
 
     private final RtsClientState state;
 

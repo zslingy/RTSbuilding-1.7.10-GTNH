@@ -8,16 +8,22 @@ import net.minecraft.util.MovingObjectPosition;
 import net.minecraft.util.Vec3;
 import net.minecraft.world.World;
 
+import com.rtsbuilding.rtsbuilding.client.panel.quickbuild.BuildShape;
+import com.rtsbuilding.rtsbuilding.client.panel.quickbuild.ShapeBuildPhase;
+import com.rtsbuilding.rtsbuilding.client.panel.quickbuild.ShapeBuildSession;
+import com.rtsbuilding.rtsbuilding.client.panel.quickbuild.ShapeFillMode;
+import com.rtsbuilding.rtsbuilding.client.panel.quickbuild.ShapeGeometryUtil;
 import com.rtsbuilding.rtsbuilding.common.BuilderMode;
 import com.rtsbuilding.rtsbuilding.entity.RtsCameraEntity;
 import com.rtsbuilding.rtsbuilding.network.RtsNetworkManager;
+import com.rtsbuilding.rtsbuilding.network.builder.C2SRtsBreakMessage;
 import com.rtsbuilding.rtsbuilding.network.builder.C2SRtsInteractMessage;
 import com.rtsbuilding.rtsbuilding.network.builder.C2SRtsMineMessage;
 import com.rtsbuilding.rtsbuilding.network.builder.C2SRtsPlaceMessage;
 import com.rtsbuilding.rtsbuilding.network.builder.C2SRtsRotateBlockMessage;
-import com.rtsbuilding.rtsbuilding.network.builder.C2SRtsUltimineMessage;
 import com.rtsbuilding.rtsbuilding.network.storage.C2SRtsLinkStorageMessage;
 import com.rtsbuilding.rtsbuilding.network.storage.C2SRtsSetFunnelMessage;
+import com.rtsbuilding.rtsbuilding.network.storage.C2SRtsSetGuiBindingMessage;
 import com.rtsbuilding.rtsbuilding.network.storage.C2SRtsUnlinkStorageMessage;
 import com.rtsbuilding.rtsbuilding.util.BlockPos;
 
@@ -89,6 +95,23 @@ public class RtsInteractionHandler {
         // Bug3修复：LINK_STORAGE 模式优先路由 — 左键绑定/取消绑定，右键仅提取
         if (mode == BuilderMode.LINK_STORAGE) {
             return handleLinkStorageModeClick(button, hit);
+        }
+
+        // GUI 绑定捕获模式 → 右键世界方块绑定 GUI
+        if (state.interaction.guiBindingCaptureActive && button == 1) {
+            int slot = state.interaction.guiBindingCaptureSlot;
+            state.interaction.guiBindingCaptureActive = false;
+            state.interaction.guiBindingCaptureSlot = -1;
+            RtsNetworkManager.NETWORK.sendToServer(
+                new C2SRtsSetGuiBindingMessage(
+                    slot,
+                    "",
+                    false,
+                    hit.blockX,
+                    hit.blockY,
+                    hit.blockZ,
+                    (byte) hit.sideHit));
+            return true;
         }
 
         if (button == 0) {
@@ -199,42 +222,66 @@ public class RtsInteractionHandler {
     // ── 左键：破坏（Bug2修复：改为渐进采矿） ──
 
     private boolean handleBreakClick(MovingObjectPosition hit, Vec3 origin, Vec3 dir, BuilderMode mode) {
-        // Bug2修复：连锁挖掘激活时发送 C2SRtsUltimineMessage 而非 C2SRtsMineMessage
+        Minecraft mc = Minecraft.getMinecraft();
+
+        // Issue 4: 范围破坏模式下左键取消锚点会话
+        if (state.interaction.ultimineActive && state.interaction.areaDestroyActive) {
+            if (state.interaction.shapeBuildSession != null) {
+                state.interaction.shapeBuildSession = null;
+                return true;
+            }
+            return true; // 无session时也消费事件，避免触发挖掘
+        }
+
+        ItemStack heldTool = mc.thePlayer.getCurrentEquippedItem();
+        String toolItemId = "";
+        ItemStack toolPrototype = null;
+        if (heldTool != null && heldTool.getItem() != null) {
+            toolItemId = (String) cpw.mods.fml.common.registry.GameData.getItemRegistry()
+                .getNameForObject(heldTool.getItem());
+            toolPrototype = heldTool;
+        }
+
         if (state.interaction.ultimineActive) {
-            String toolItemId = state.interaction.selectedBlockId != null ? state.interaction.selectedBlockId : "";
-            C2SRtsUltimineMessage msg = new C2SRtsUltimineMessage(
+            // 连锁挖掘：复用普通渐进挖掘，第一块破坏后触发链式破坏
+            C2SRtsMineMessage msg = new C2SRtsMineMessage(
                 hit.blockX,
                 hit.blockY,
                 hit.blockZ,
                 (byte) hit.sideHit,
-                (byte) 0,
+                true, // start = true
+                (byte) mc.thePlayer.inventory.currentItem,
                 toolItemId,
-                null,
-                (short) state.interaction.ultimineLimit,
-                (byte) 0); // mode 0 = chain
+                toolPrototype,
+                false, // allowPlacedBlockRecovery
+                true); // ultimine = true
             RtsNetworkManager.NETWORK.sendToServer(msg);
-            return true;
+        } else {
+            // 普通单方块挖掘
+            C2SRtsMineMessage msg = new C2SRtsMineMessage(
+                hit.blockX,
+                hit.blockY,
+                hit.blockZ,
+                (byte) hit.sideHit,
+                true, // start = true
+                (byte) mc.thePlayer.inventory.currentItem,
+                toolItemId,
+                toolPrototype,
+                false); // allowPlacedBlockRecovery
+            RtsNetworkManager.NETWORK.sendToServer(msg);
         }
-        // Bug2修复：发送 C2SRtsMineMessage(start=true) 替代即时 C2SRtsBreakMessage
-        // 服务端 RtsMineManager 将逐 tick 累积挖掘进度
-        String toolItemId = state.interaction.selectedBlockId != null ? state.interaction.selectedBlockId : "";
-        C2SRtsMineMessage msg = new C2SRtsMineMessage(
-            hit.blockX,
-            hit.blockY,
-            hit.blockZ,
-            (byte) hit.sideHit,
-            true, // start = true
-            (byte) 0, // toolSlot (0 = 当前选中)
-            toolItemId,
-            null, // toolPrototype (让服务端根据 toolSlot 自行获取)
-            false); // allowPlacedBlockRecovery
-        RtsNetworkManager.NETWORK.sendToServer(msg);
         return true;
     }
 
     // ── 右键：放置 or 交互 ──
 
     private boolean handlePlaceOrInteract(MovingObjectPosition hit, Vec3 origin, Vec3 dir, BuilderMode mode) {
+        // Issue 4: 快速建造模式 或 范围破坏模式 → 锚点形状操作
+        if (state.interaction.quickBuildActive
+            || (state.interaction.ultimineActive && state.interaction.areaDestroyActive)) {
+            return handleShapeBuildRightClick(hit);
+        }
+
         switch (mode) {
             case INTERACT:
                 return handleInteractRightClick(hit, origin, dir);
@@ -264,6 +311,148 @@ public class RtsInteractionHandler {
     }
 
     /**
+     * Issue 4: 统一的形状锚点操作 — 快速建造和范围破坏共用。
+     * 阶段1: 创建session设置pointA
+     * 阶段2: 设置pointB
+     * 阶段3(可选): NEED_HEIGHT阶段(滚轮调整)
+     * 阶段4: READY_CONFIRM — 右键确认放置/破坏
+     */
+    private boolean handleShapeBuildRightClick(MovingObjectPosition hit) {
+        InteractionViewModel ivm = state.interaction;
+        ShapeBuildSession session = ivm.shapeBuildSession;
+        BuildShape shape = parseBuildShape(ivm.quickBuildShape);
+        boolean isDestroy = ivm.areaDestroyActive;
+
+        // BLOCK形状单次点击直接放置/破坏
+        if (shape == BuildShape.BLOCK) {
+            BlockPos pos = new BlockPos(hit.blockX, hit.blockY, hit.blockZ);
+            if (isDestroy) {
+                sendAreaDestroyBatch(java.util.Collections.singletonList(pos));
+            } else {
+                java.util.List<BlockPos> positions = new java.util.ArrayList<>();
+                positions.add(pos);
+                sendQuickBuildBatch(positions, hit);
+            }
+            return true;
+        }
+
+        if (session == null || session.phase == ShapeBuildPhase.IDLE) {
+            // 阶段1: 创建session，设置pointA
+            BlockPos pointA = new BlockPos(hit.blockX, hit.blockY, hit.blockZ);
+            ivm.shapeBuildSession = new ShapeBuildSession(
+                shape,
+                pointA,
+                hit.sideHit,
+                ivm.quickBuildRotation * 15,
+                ivm.quickBuildCylinder);
+            return true;
+        }
+
+        if (session.phase == ShapeBuildPhase.NEED_SECOND_POINT) {
+            // 阶段2: 设置pointB
+            session.pointB = new BlockPos(hit.blockX, hit.blockY, hit.blockZ);
+            // 判断是否需要高度阶段
+            if (shape == BuildShape.WALL || shape == BuildShape.BOX
+                || (shape == BuildShape.CIRCLE && session.cylinder)) {
+                session.phase = ShapeBuildPhase.NEED_HEIGHT;
+            } else {
+                session.phase = ShapeBuildPhase.READY_CONFIRM;
+            }
+            return true;
+        }
+
+        if (session.phase == ShapeBuildPhase.NEED_HEIGHT) {
+            // NEED_HEIGHT阶段: 右键确认高度
+            session.phase = ShapeBuildPhase.READY_CONFIRM;
+            return true;
+        }
+
+        if (session.phase == ShapeBuildPhase.READY_CONFIRM) {
+            // 阶段4: 确认 — 生成所有位置并发送
+            ShapeFillMode fillMode = ShapeFillMode.parse(ivm.quickBuildFill);
+            java.util.List<BlockPos> positions = ShapeGeometryUtil
+                .buildShapePositions(session, fillMode, ivm.lineSnap8Direction);
+            if (isDestroy) {
+                sendAreaDestroyBatch(positions);
+            } else {
+                sendQuickBuildBatch(positions, hit);
+            }
+            ivm.shapeBuildSession = null; // 重置
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * 发送快速建造批量放置消息 — 逐个发送C2SRtsPlaceMessage(quickBuild=true)。
+     */
+    private void sendQuickBuildBatch(java.util.List<BlockPos> positions, MovingObjectPosition hit) {
+        String blockId = state.interaction.selectedBlockId;
+        int meta = state.interaction.selectedBlockMeta;
+        ItemStack prototype = createBlockStack(blockId, meta);
+
+        for (BlockPos pos : positions) {
+            C2SRtsPlaceMessage msg = new C2SRtsPlaceMessage(
+                pos.getX(),
+                pos.getY(),
+                pos.getZ(),
+                (byte) hit.sideHit,
+                hit.hitVec.xCoord,
+                hit.hitVec.yCoord,
+                hit.hitVec.zCoord,
+                (byte) 0,
+                true, // P0-2: forcePlace = true（快速建造强制放置）
+                true, // P0-2: skipIfOccupied = true（跳过已占用位置）
+                blockId,
+                prototype,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                true); // quickBuild = true
+            RtsNetworkManager.NETWORK.sendToServer(msg);
+        }
+    }
+
+    /**
+     * Issue 4: 发送范围破坏批量消息 — 逐个发送C2SRtsBreakMessage。
+     */
+    private void sendAreaDestroyBatch(java.util.List<BlockPos> positions) {
+        for (BlockPos pos : positions) {
+            C2SRtsBreakMessage msg = new C2SRtsBreakMessage(
+                pos.getX(),
+                pos.getY(),
+                pos.getZ(),
+                (byte) 0, // face
+                true); // start = true
+            RtsNetworkManager.NETWORK.sendToServer(msg);
+        }
+    }
+
+    private static BuildShape parseBuildShape(String shapeName) {
+        if (shapeName == null) return BuildShape.BLOCK;
+        String s = shapeName.toUpperCase()
+            .trim();
+        switch (s) {
+            case "LINE":
+                return BuildShape.LINE;
+            case "SQUARE":
+                return BuildShape.SQUARE;
+            case "WALL":
+                return BuildShape.WALL;
+            case "CIRCLE":
+                return BuildShape.CIRCLE;
+            case "BOX":
+                return BuildShape.BOX;
+            default:
+                return BuildShape.BLOCK;
+        }
+    }
+
+    /**
      * 交互模式右键：
      * - 有选中物品 → 放置方块
      * - 空手 → 交互（打开方块GUI / 实体交互）
@@ -273,16 +462,25 @@ public class RtsInteractionHandler {
         String blockId = state.interaction.selectedBlockId;
         int meta = state.interaction.selectedBlockMeta;
 
-        // 没有选中物品 → 空手交互
+        // P1-2: 空手交互：先检测实体，再检测方块
         if (blockId == null || blockId.isEmpty() || "minecraft:air".equals(blockId)) {
+            int entityId = findEntityHit(origin, dir);
+            if (entityId != C2SRtsInteractMessage.NO_ENTITY) {
+                return sendInteractMessageWithEntity(entityId, hit, origin, dir);
+            }
             return sendInteractMessage(hit, origin, dir);
         }
 
-        // 有选中物品 → 放置
+        // 有选中物品
         ItemStack prototype = createBlockStack(blockId, meta);
         if (prototype == null) {
-            // 无法解析为方块 → 降级为交互
-            return sendInteractMessage(hit, origin, dir);
+            // 问题15: 非方块物品 → 先尝试实体交互，再使用物品
+            int entityId = findEntityHit(origin, dir);
+            if (entityId != C2SRtsInteractMessage.NO_ENTITY) {
+                return sendInteractMessageWithEntity(entityId, hit, origin, dir);
+            }
+            // 手持物品使用（食物、药水、工具等）
+            return sendUseItemMessage(hit);
         }
 
         return sendPlaceMessage(hit, origin, dir, blockId, prototype);
@@ -333,6 +531,22 @@ public class RtsInteractionHandler {
             dir.xCoord,
             dir.yCoord,
             dir.zCoord);
+        RtsNetworkManager.NETWORK.sendToServer(msg);
+        return true;
+    }
+
+    /**
+     * 问题15: 发送手持物品使用消息（食物、药水、工具等非方块物品）。
+     */
+    private boolean sendUseItemMessage(MovingObjectPosition hit) {
+        com.rtsbuilding.rtsbuilding.network.builder.C2SRtsUseItemMessage msg = new com.rtsbuilding.rtsbuilding.network.builder.C2SRtsUseItemMessage(
+            hit.blockX,
+            hit.blockY,
+            hit.blockZ,
+            (byte) hit.sideHit,
+            hit.hitVec.xCoord,
+            hit.hitVec.yCoord,
+            hit.hitVec.zCoord);
         RtsNetworkManager.NETWORK.sendToServer(msg);
         return true;
     }
@@ -393,6 +607,72 @@ public class RtsInteractionHandler {
         ItemBlock itemBlock = (ItemBlock) net.minecraft.item.Item.getItemFromBlock(block);
         if (itemBlock == null) return null;
         return new ItemStack(itemBlock, 1, meta);
+    }
+
+    // ── P1-2: 实体射线检测 ──
+
+    /**
+     * 沿射线搜索最近的实体，返回 entityId。无命中返回 NO_ENTITY。
+     */
+    private int findEntityHit(Vec3 origin, Vec3 dir) {
+        Minecraft mc = Minecraft.getMinecraft();
+        World world = mc.theWorld;
+        if (world == null) return C2SRtsInteractMessage.NO_ENTITY;
+
+        Vec3 start = origin;
+        Vec3 end = start.addVector(dir.xCoord * RAY_REACH, dir.yCoord * RAY_REACH, dir.zCoord * RAY_REACH);
+
+        double closestDist = Double.MAX_VALUE;
+        int closestEntityId = C2SRtsInteractMessage.NO_ENTITY;
+
+        // 先做方块射线检测，获取方块命中距离作为实体检测上限
+        MovingObjectPosition blockHit = world.rayTraceBlocks(start, end);
+        double blockDist = blockHit != null ? start.distanceTo(blockHit.hitVec) : RAY_REACH;
+
+        for (Object obj : world.loadedEntityList) {
+            if (!(obj instanceof net.minecraft.entity.Entity)) continue;
+            net.minecraft.entity.Entity entity = (net.minecraft.entity.Entity) obj;
+            if (!entity.isEntityAlive()) continue;
+            if (entity == mc.thePlayer) continue;
+
+            float expand = entity.getCollisionBorderSize();
+            net.minecraft.util.AxisAlignedBB aabb = entity.boundingBox.expand(expand, expand, expand);
+            MovingObjectPosition entityHit = aabb.calculateIntercept(start, end);
+            if (entityHit != null) {
+                double dist = start.distanceTo(entityHit.hitVec);
+                if (dist < closestDist && dist < blockDist) {
+                    closestDist = dist;
+                    closestEntityId = entity.getEntityId();
+                }
+            }
+        }
+        return closestEntityId;
+    }
+
+    /**
+     * 发送带 entityId 的交互消息（实体交互优先）。
+     */
+    private boolean sendInteractMessageWithEntity(int entityId, MovingObjectPosition hit, Vec3 origin, Vec3 dir) {
+        C2SRtsInteractMessage msg = new C2SRtsInteractMessage(
+            entityId,
+            hit.blockX,
+            hit.blockY,
+            hit.blockZ,
+            (byte) hit.sideHit,
+            hit.hitVec.xCoord,
+            hit.hitVec.yCoord,
+            hit.hitVec.zCoord,
+            C2SRtsInteractMessage.SOURCE_TOOL_SLOT,
+            (byte) 0,
+            "",
+            origin.xCoord,
+            origin.yCoord,
+            origin.zCoord,
+            dir.xCoord,
+            dir.yCoord,
+            dir.zCoord);
+        RtsNetworkManager.NETWORK.sendToServer(msg);
+        return true;
     }
 
     // ── Bug2修复：挖掘中止 ──

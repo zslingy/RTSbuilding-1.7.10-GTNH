@@ -30,7 +30,9 @@ import cpw.mods.fml.common.registry.GameData;
 public class RecentGridView implements IRtsPanel {
 
     private static final String PANEL_NAME = "recent_grid";
-    private static final int SLOT_SIZE = 18;
+    private static final int SLOT_SIZE = 14; // Issue 5: 与快捷栏格子大小一致
+    private static final int COLS = 20;
+    private static final int ROWS_COUNT = 2;
 
     private final RtsClientState state;
     private final RenderItem renderItem = new RenderItem();
@@ -47,7 +49,7 @@ public class RecentGridView implements IRtsPanel {
 
     @Override
     public Rectangle getBounds() {
-        return new Rectangle(recentX, recentY, recentW, SLOT_SIZE);
+        return new Rectangle(recentX, recentY, recentW, ROWS_COUNT * SLOT_SIZE);
     }
 
     @Override
@@ -79,12 +81,14 @@ public class RecentGridView implements IRtsPanel {
 
         // 标签
         String label = "Recent";
-        int labelW = Math.min(recentW, count * SLOT_SIZE);
         fr.drawString(label, recentX, recentY - 10, 0xFFAAAAAA);
 
         for (int i = 0; i < count; i++) {
-            int sx = recentX + i * SLOT_SIZE;
-            int sy = recentY;
+            int col = i % COLS;
+            int row = i / COLS;
+            if (row >= ROWS_COUNT) break;
+            int sx = recentX + col * SLOT_SIZE;
+            int sy = recentY + row * SLOT_SIZE;
 
             // 背景
             Gui.drawRect(sx, sy, sx + SLOT_SIZE, sy + SLOT_SIZE, 0x88444444);
@@ -110,8 +114,10 @@ public class RecentGridView implements IRtsPanel {
 
         InteractionViewModel ivm = state.interaction;
         int col = (mouseX - recentX) / SLOT_SIZE;
-        if (col >= 0 && col < ivm.recentBlocks.size() && mouseY >= recentY && mouseY <= recentY + SLOT_SIZE) {
-            String blockId = ivm.recentBlocks.get(col);
+        int row = (mouseY - recentY) / SLOT_SIZE;
+        int index = row * COLS + col;
+        if (col >= 0 && col < COLS && row >= 0 && row < ROWS_COUNT && index >= 0 && index < ivm.recentBlocks.size()) {
+            String blockId = ivm.recentBlocks.get(index);
             state.interaction.selectedBlockId = blockId;
             state.interaction.selectedBlockMeta = 0;
             return true;

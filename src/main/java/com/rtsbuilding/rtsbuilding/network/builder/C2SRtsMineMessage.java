@@ -18,11 +18,17 @@ public class C2SRtsMineMessage implements IMessage {
     private String toolItemId;
     private ItemStack toolPrototype;
     private boolean allowPlacedBlockRecovery;
+    private boolean ultimine;
 
     public C2SRtsMineMessage() {}
 
     public C2SRtsMineMessage(int posX, int posY, int posZ, byte face, boolean start, byte toolSlot, String toolItemId,
         ItemStack toolPrototype, boolean allowPlacedBlockRecovery) {
+        this(posX, posY, posZ, face, start, toolSlot, toolItemId, toolPrototype, allowPlacedBlockRecovery, false);
+    }
+
+    public C2SRtsMineMessage(int posX, int posY, int posZ, byte face, boolean start, byte toolSlot, String toolItemId,
+        ItemStack toolPrototype, boolean allowPlacedBlockRecovery, boolean ultimine) {
         this.posX = posX;
         this.posY = posY;
         this.posZ = posZ;
@@ -32,6 +38,7 @@ public class C2SRtsMineMessage implements IMessage {
         this.toolItemId = toolItemId != null ? toolItemId : "";
         this.toolPrototype = toolPrototype != null ? toolPrototype.copy() : null;
         this.allowPlacedBlockRecovery = allowPlacedBlockRecovery;
+        this.ultimine = ultimine;
     }
 
     @Override
@@ -47,6 +54,7 @@ public class C2SRtsMineMessage implements IMessage {
         buf.writeBoolean(hasTool);
         if (hasTool) ByteBufUtils.writeItemStack(buf, toolPrototype);
         buf.writeBoolean(allowPlacedBlockRecovery);
+        buf.writeBoolean(ultimine);
     }
 
     @Override
@@ -60,6 +68,7 @@ public class C2SRtsMineMessage implements IMessage {
         toolItemId = readUtf(buf, 256);
         toolPrototype = buf.readBoolean() ? ByteBufUtils.readItemStack(buf) : null;
         allowPlacedBlockRecovery = buf.readBoolean();
+        ultimine = buf.readBoolean();
     }
 
     private static void writeUtf(ByteBuf b, String s, int max) {
@@ -113,6 +122,10 @@ public class C2SRtsMineMessage implements IMessage {
         return allowPlacedBlockRecovery;
     }
 
+    public boolean isUltimine() {
+        return ultimine;
+    }
+
     public static class Handler implements IMessageHandler<C2SRtsMineMessage, IMessage> {
 
         @Override
@@ -121,7 +134,6 @@ public class C2SRtsMineMessage implements IMessage {
             if (player == null) return null;
 
             if (msg.isStart()) {
-                // 从玩家背包获取工具原型（客户端发送的 toolPrototype 可能为 null）
                 ItemStack tool = msg.getToolPrototype();
                 if (tool == null && msg.getToolSlot() >= 0 && msg.getToolSlot() < 9) {
                     tool = player.inventory.mainInventory[msg.getToolSlot()];
@@ -139,7 +151,8 @@ public class C2SRtsMineMessage implements IMessage {
                     msg.getToolSlot(),
                     msg.getToolItemId(),
                     tool,
-                    msg.isAllowPlacedBlockRecovery());
+                    msg.isAllowPlacedBlockRecovery(),
+                    msg.isUltimine());
             } else {
                 com.rtsbuilding.rtsbuilding.server.RtsMineManager.abortMining(player);
             }

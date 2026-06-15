@@ -29,7 +29,7 @@ public class PinSlotView implements IRtsPanel {
 
     private static final String PANEL_NAME = "pin_slots";
     private static final int MAX_PINS = 8;
-    private static final int SLOT_SIZE = 20;
+    private static final int SLOT_SIZE = 10;
     private static final int TOP_OFFSET = 240;
 
     private final RtsClientState state;

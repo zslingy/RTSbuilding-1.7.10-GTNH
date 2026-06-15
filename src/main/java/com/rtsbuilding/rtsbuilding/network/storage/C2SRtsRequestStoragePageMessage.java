@@ -1,14 +1,8 @@
 package com.rtsbuilding.rtsbuilding.network.storage;
 
-import java.util.List;
-
 import net.minecraft.entity.player.EntityPlayerMP;
-import net.minecraft.item.ItemStack;
 
-import com.rtsbuilding.rtsbuilding.network.RtsNetworkManager;
 import com.rtsbuilding.rtsbuilding.server.RtsStorageManager;
-import com.rtsbuilding.rtsbuilding.server.storage.RtsStorageSession;
-import com.rtsbuilding.rtsbuilding.server.storage.RtsStorageSession.PageResult;
 
 import cpw.mods.fml.common.network.simpleimpl.IMessage;
 import cpw.mods.fml.common.network.simpleimpl.IMessageHandler;
@@ -78,25 +72,7 @@ public class C2SRtsRequestStoragePageMessage implements IMessage {
             EntityPlayerMP player = ctx.getServerHandler().playerEntity;
             if (player == null) return null;
 
-            RtsStorageSession session = RtsStorageManager.getSession(player);
-            if (!RtsStorageManager.tryPopulateFromAe2(player, session)) {
-                session.populateDebugData();
-            }
-
-            String sort = m.getSortMode();
-            if (sort == null || sort.isEmpty()) sort = "name_asc";
-
-            PageResult result = session.queryPage(sort, m.getPage(), 88);
-
-            List<ItemStack> stacks = session.toItemStacks(result.items);
-
-            S2CRtsStoragePageMessage response = new S2CRtsStoragePageMessage(
-                result.page,
-                result.totalPages,
-                m.getWindowId(),
-                stacks);
-            RtsNetworkManager.NETWORK.sendTo(response, player);
-
+            RtsStorageManager.sendStoragePage(player, m.getPage(), m.getWindowId());
             return null;
         }
     }

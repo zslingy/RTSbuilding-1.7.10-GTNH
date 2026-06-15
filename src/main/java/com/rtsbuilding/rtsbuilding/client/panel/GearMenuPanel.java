@@ -8,6 +8,8 @@ import net.minecraft.client.gui.Gui;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.util.StatCollector;
 
+import org.lwjgl.opengl.GL11;
+
 import com.rtsbuilding.rtsbuilding.Config;
 import com.rtsbuilding.rtsbuilding.client.CameraViewModel;
 import com.rtsbuilding.rtsbuilding.client.InteractionViewModel;
@@ -114,12 +116,24 @@ public class GearMenuPanel implements IRtsPanel {
             : 0xFF8890A0;
         fr.drawString("\u2715", closeX, winY + 2, closeColor);
 
-        // 内容区域
+        // 内容区域（P2-6: 添加Scissor裁剪防止内容溢出）
         int cx = winX + 8;
         int cy = winY + TITLE_BAR_H + CONTENT_TOP - scroll;
         int cw = winW - 16;
 
+        // P2-6: 使用GL11.glScissor裁剪内容区域，防止子面板滑动超过父面板
+        GL11.glEnable(GL11.GL_SCISSOR_TEST);
+        // glScissor使用屏幕坐标（Y轴向上），需要转换
+        Minecraft mc = Minecraft.getMinecraft();
+        int scissorX = (winX + 2) * mc.displayWidth / screen.width;
+        int scissorY = mc.displayHeight - (winY + winH - 2) * mc.displayHeight / screen.height;
+        int scissorW = (winW - 4) * mc.displayWidth / screen.width;
+        int scissorH = (winH - TITLE_BAR_H - 4) * mc.displayHeight / screen.height;
+        GL11.glScissor(scissorX, scissorY, scissorW, scissorH);
+
         renderControls(fr, mouseX, mouseY + scroll, cx, cy, cw);
+
+        GL11.glDisable(GL11.GL_SCISSOR_TEST);
 
         // 滚动条
         renderScrollbar(winX + winW - 8, winY + TITLE_BAR_H, winH - TITLE_BAR_H);

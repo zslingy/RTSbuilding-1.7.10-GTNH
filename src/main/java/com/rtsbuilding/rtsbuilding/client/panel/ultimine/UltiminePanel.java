@@ -267,6 +267,9 @@ public class UltiminePanel extends RtsWindowPanel {
 
         drawRect(bx, by, bx + bw, by + ROW_H, border);
         drawRect(bx + 1, by + 1, bx + bw - 1, by + ROW_H - 1, bg);
-        fr.drawString(label, bx + 2, by + 2, textColor);
+        // Issue 3: 使用翻译键显示形状名称
+        String displayName = StatCollector.translateToLocal("screen.rtsbuilding.shape." + label.toLowerCase());
+        if (displayName == null || displayName.startsWith("screen.")) displayName = label;
+        fr.drawString(displayName, bx + 2, by + 2, textColor);
     }
 }

@@ -48,7 +48,45 @@ public final class RtsAe2Compat {
 
     /** 给定的TileEntity是否是AE2网格主机（实现了IGridHost接口） */
     public static boolean isAe2GridHost(TileEntity te) {
-        return te instanceof IGridHost;
+        if (te instanceof IGridHost) return true;
+        if (!isAvailable() || te == null) return false;
+
+        // 对 cable bus / part host 做反射探测
+        try {
+            String clsName = te.getClass()
+                .getName()
+                .toLowerCase();
+            if (clsName.startsWith("appeng.")) {
+                // 尝试反射获取 grid node
+                java.lang.reflect.Method m = te.getClass()
+                    .getMethod("getGridNode", ForgeDirection.class);
+                if (m != null) {
+                    Object node = m.invoke(te, ForgeDirection.UNKNOWN);
+                    if (node instanceof IGridNode) return true;
+                }
+            }
+        } catch (Exception ignored) {}
+
+        try {
+            // 对 multipart / cable bus: 尝试 getPart / getCableBus 方法
+            java.lang.reflect.Method getPart = te.getClass()
+                .getMethod("getPart");
+            if (getPart != null) {
+                Object part = getPart.invoke(te);
+                if (part instanceof IGridHost) return true;
+            }
+        } catch (Exception ignored) {}
+
+        try {
+            java.lang.reflect.Method getTile = te.getClass()
+                .getMethod("getTile");
+            if (getTile != null) {
+                Object tile = getTile.invoke(te);
+                if (tile instanceof IGridHost) return true;
+            }
+        } catch (Exception ignored) {}
+
+        return false;
     }
 
     // ========================================================================
@@ -64,10 +102,10 @@ public final class RtsAe2Compat {
      */
     public static boolean tryConnectAe2(TileEntity te, ForgeDirection side) {
         if (!isAvailable() || te == null) return false;
-        if (!(te instanceof IGridHost)) return false;
+        if (!isAe2GridHost(te)) return false;
 
         try {
-            IGridNode node = getGridNode((IGridHost) te, side);
+            IGridNode node = getGridNodeSafe(te, side);
             if (node == null) return false;
             IGrid grid = node.getGrid();
             if (grid == null) return false;
@@ -271,9 +309,9 @@ public final class RtsAe2Compat {
      * 调用链：IGridHost → IGridNode → IGrid → IStorageGrid → getItemInventory()
      */
     private static IMEMonitor<IAEItemStack> getItemMonitor(TileEntity te, ForgeDirection side) {
-        if (!(te instanceof IGridHost)) return null;
+        if (!isAe2GridHost(te)) return null;
         try {
-            IGridNode node = getGridNode((IGridHost) te, side);
+            IGridNode node = getGridNodeSafe(te, side);
             if (node == null) return null;
 
             IGrid grid = node.getGrid();
@@ -286,6 +324,28 @@ public final class RtsAe2Compat {
         } catch (Exception e) {
             return null;
         }
+    }
+
+    /**
+     * 安全获取IGridNode，兼容 instanceof + 反射路径。
+     */
+    private static IGridNode getGridNodeSafe(TileEntity te, ForgeDirection preferred) {
+        if (te instanceof IGridHost) {
+            return getGridNode((IGridHost) te, preferred);
+        }
+        try {
+            java.lang.reflect.Method m = te.getClass()
+                .getMethod("getGridNode", ForgeDirection.class);
+            if (m != null) {
+                Object node = m.invoke(te, preferred);
+                if (node instanceof IGridNode) return (IGridNode) node;
+                for (ForgeDirection dir : ForgeDirection.VALID_DIRECTIONS) {
+                    node = m.invoke(te, dir);
+                    if (node instanceof IGridNode) return (IGridNode) node;
+                }
+            }
+        } catch (Exception ignored) {}
+        return null;
     }
 
     /**

@@ -116,9 +116,27 @@ public class RtsTopBarPanel implements IRtsPanel {
         int btnRowBottom = barY + BAR_HEIGHT - 2;
         int btnYCenter = barY + BAR_HEIGHT / 2 - 4;
 
+        // P2-4: GEAR按钮右对齐，先渲染在最右侧
+        int gearBtnX = w - ACTION_BUTTON_W - 4;
+        boolean gearActive = isButtonActive(BtnId.GEAR);
+        int gearColor = gearActive ? BUTTON_COLOR_ACTIVE
+            : (isHovered(mouseX, mouseY, gearBtnX, btnRowTop, gearBtnX + ACTION_BUTTON_W, btnRowBottom)
+                ? BUTTON_COLOR_HOVER
+                : BUTTON_COLOR);
+        Gui.drawRect(gearBtnX, btnRowTop, gearBtnX + ACTION_BUTTON_W, btnRowBottom, gearColor);
+        String gearIcon = getButtonIcon(BtnId.GEAR);
+        drawCenteredString(
+            fr,
+            gearIcon,
+            gearBtnX + ACTION_BUTTON_W / 2,
+            btnYCenter,
+            gearActive ? TEXT_COLOR_ACTIVE : TEXT_COLOR);
+
+        // 其余按钮从左侧开始
         int btnX = 4;
         for (int i = 0; i < TOP_BUTTONS.length; i++) {
             BtnId id = TOP_BUTTONS[i];
+            if (id == BtnId.GEAR) continue; // GEAR已单独渲染
             boolean isMode = (i < MODE_BUTTON_COUNT);
             int bw = isMode ? MODE_BUTTON_W : ACTION_BUTTON_W;
 
@@ -127,7 +145,7 @@ public class RtsTopBarPanel implements IRtsPanel {
             int btnColor;
             if (active) {
                 btnColor = BUTTON_COLOR_ACTIVE;
-            } else if (i == hoveredButton) {
+            } else if (isHovered(mouseX, mouseY, btnX, btnRowTop, btnX + bw, btnRowBottom)) {
                 btnColor = BUTTON_COLOR_HOVER;
             } else {
                 btnColor = BUTTON_COLOR;
@@ -150,23 +168,6 @@ public class RtsTopBarPanel implements IRtsPanel {
 
             btnX = btnRight + BUTTON_SPACING;
         }
-
-        // 右侧缩放按钮
-        String zoomLabel = String.format("%.0f%%", state.uiZoom * 100);
-        int zoomLabelWidth = fr.getStringWidth(zoomLabel);
-        int zoomX = w - zoomLabelWidth - 60;
-        int minusBtnX = zoomX;
-        int plusBtnX = zoomX + zoomLabelWidth + 30;
-
-        fr.drawString(zoomLabel, zoomX + 14, btnYCenter, 0xFFCCCCCC);
-
-        int minusColor = (hoveredButton == ZOOM_BTN_BASE) ? BUTTON_COLOR_HOVER : BUTTON_COLOR;
-        Gui.drawRect(minusBtnX, btnRowTop, minusBtnX + 10, btnRowBottom, minusColor);
-        drawCenteredString(fr, "-", minusBtnX + 5, btnYCenter, TEXT_COLOR);
-
-        int plusColor = (hoveredButton == ZOOM_BTN_BASE + 1) ? BUTTON_COLOR_HOVER : BUTTON_COLOR;
-        Gui.drawRect(plusBtnX, btnRowTop, plusBtnX + 10, btnRowBottom, plusColor);
-        drawCenteredString(fr, "+", plusBtnX + 5, btnYCenter, TEXT_COLOR);
 
         // === Row 2: 当前模式显示 ===
         int row2Y = barY + BAR_HEIGHT + 2;
@@ -212,7 +213,7 @@ public class RtsTopBarPanel implements IRtsPanel {
             statusLine.append(
                 StatCollector.translateToLocalFormatted(
                     "screen.rtsbuilding.status.rotation",
-                    state.interaction.quickBuildRotation * 90));
+                    state.interaction.quickBuildRotation * 15));
         }
 
         if (state.interaction.ultimineActive) {
@@ -230,6 +231,10 @@ public class RtsTopBarPanel implements IRtsPanel {
         fr.drawString(statusLine.toString(), 8, row3Y, 0xFF999999);
     }
 
+    private static boolean isHovered(int mx, int my, int x1, int y1, int x2, int y2) {
+        return mx >= x1 && mx <= x2 && my >= y1 && my <= y2;
+    }
+
     @Override
     public boolean onMouseClick(int mouseX, int mouseY, int button) {
         if (button != 0) return false;
@@ -237,31 +242,28 @@ public class RtsTopBarPanel implements IRtsPanel {
         int btnRowTop = barY + 2;
         int btnRowBottom = barY + BAR_HEIGHT - 2;
 
+        // P2-4: GEAR按钮右对齐
+        int gearBtnX = barWidth - ACTION_BUTTON_W - 4;
+        if (mouseX >= gearBtnX && mouseX <= gearBtnX + ACTION_BUTTON_W
+            && mouseY >= btnRowTop
+            && mouseY <= btnRowBottom) {
+            handleButtonClick(BtnId.GEAR);
+            return true;
+        }
+
+        // 其余按钮从左侧开始
         int btnX = 4;
         for (int i = 0; i < TOP_BUTTONS.length; i++) {
-            int bw = (i < MODE_BUTTON_COUNT) ? MODE_BUTTON_W : ACTION_BUTTON_W;
+            BtnId id = TOP_BUTTONS[i];
+            if (id == BtnId.GEAR) continue; // GEAR已单独处理
+            boolean isMode = (i < MODE_BUTTON_COUNT);
+            int bw = isMode ? MODE_BUTTON_W : ACTION_BUTTON_W;
             int btnRight = btnX + bw;
             if (mouseX >= btnX && mouseX <= btnRight && mouseY >= btnRowTop && mouseY <= btnRowBottom) {
-                handleButtonClick(TOP_BUTTONS[i]);
+                handleButtonClick(id);
                 return true;
             }
             btnX = btnRight + BUTTON_SPACING;
-        }
-
-        int barW = barWidth > 0 ? barWidth : 400;
-        String zoomLabel = String.format("%.0f%%", state.uiZoom * 100);
-        int zoomLabelWidth = screenMinecraft().fontRenderer.getStringWidth(zoomLabel);
-        int zoomBaseX = barW - zoomLabelWidth - 60;
-        int minusBtnX = zoomBaseX;
-        int plusBtnX = zoomBaseX + zoomLabelWidth + 30;
-
-        if (mouseX >= minusBtnX && mouseX <= minusBtnX + 10 && mouseY >= btnRowTop && mouseY <= btnRowBottom) {
-            state.uiZoom = Math.max(ZOOM_MIN, state.uiZoom - ZOOM_STEP);
-            return true;
-        }
-        if (mouseX >= plusBtnX && mouseX <= plusBtnX + 10 && mouseY >= btnRowTop && mouseY <= btnRowBottom) {
-            state.uiZoom = Math.min(ZOOM_MAX, state.uiZoom + ZOOM_STEP);
-            return true;
         }
 
         return false;
@@ -310,12 +312,33 @@ public class RtsTopBarPanel implements IRtsPanel {
             case FUNNEL:
                 state.interaction.currentMode = BuilderMode.FUNNEL;
                 state.interaction.funnelActive = true;
+                GuiScreen funnelScr = Minecraft.getMinecraft().currentScreen;
+                if (funnelScr instanceof com.rtsbuilding.rtsbuilding.client.RtsScreen) {
+                    ((com.rtsbuilding.rtsbuilding.client.RtsScreen) funnelScr).getFunnelPanel()
+                        .setOpen(true);
+                }
                 break;
             case QUICK_BUILD:
                 state.interaction.quickBuildActive = !state.interaction.quickBuildActive;
+                // 修复: toggle为active时重新打开面板(X按钮关闭后)
+                if (state.interaction.quickBuildActive) {
+                    GuiScreen current = Minecraft.getMinecraft().currentScreen;
+                    if (current instanceof com.rtsbuilding.rtsbuilding.client.RtsScreen) {
+                        ((com.rtsbuilding.rtsbuilding.client.RtsScreen) current).getQuickBuildPanel()
+                            .setOpen(true);
+                    }
+                }
                 break;
             case ULTIMINE:
                 state.interaction.ultimineActive = !state.interaction.ultimineActive;
+                // 修复: toggle为active时重新打开面板(X按钮关闭后)
+                if (state.interaction.ultimineActive) {
+                    GuiScreen current = Minecraft.getMinecraft().currentScreen;
+                    if (current instanceof com.rtsbuilding.rtsbuilding.client.RtsScreen) {
+                        ((com.rtsbuilding.rtsbuilding.client.RtsScreen) current).getUltiminePanel()
+                            .setOpen(true);
+                    }
+                }
                 break;
             case CHUNK_VIEW:
                 state.interaction.chunkViewActive = !state.interaction.chunkViewActive;

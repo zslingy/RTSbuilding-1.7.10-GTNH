@@ -22,10 +22,10 @@ import com.rtsbuilding.rtsbuilding.network.storage.C2SRtsRequestStoragePageMessa
  */
 public class SortButtonsView {
 
-    public static final int SORT_BUTTON_SIZE = 16;
-    private static final int SORT_GAP = 4;
-    private static final int HEIGHT_BUTTON_SIZE = 16;
-    private static final int COL_WIDTH = 58;
+    public static final int SORT_BUTTON_SIZE = 8;
+    private static final int SORT_GAP = 2;
+    private static final int HEIGHT_BUTTON_SIZE = 8;
+    private static final int COL_WIDTH = 29;
 
     private final RtsClientState state;
 
@@ -169,7 +169,7 @@ public class SortButtonsView {
 
     /** +/- 按钮：调整面板高度 */
     private void adjustHeight(int direction) {
-        int newH = state.storage.panelHeight + direction * 22;
+        int newH = state.storage.panelHeight + direction * 11;
         newH = Math.max(StorageViewModel.MIN_PANEL_H, Math.min(StorageViewModel.MAX_PANEL_H, newH));
         state.storage.panelHeight = newH;
     }

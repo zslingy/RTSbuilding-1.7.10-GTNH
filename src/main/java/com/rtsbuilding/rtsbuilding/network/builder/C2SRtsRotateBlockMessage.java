@@ -1,5 +1,9 @@
 package com.rtsbuilding.rtsbuilding.network.builder;
 
+import net.minecraft.entity.player.EntityPlayerMP;
+
+import com.rtsbuilding.rtsbuilding.server.RtsStorageManager;
+
 import cpw.mods.fml.common.network.simpleimpl.IMessage;
 import cpw.mods.fml.common.network.simpleimpl.IMessageHandler;
 import cpw.mods.fml.common.network.simpleimpl.MessageContext;
@@ -47,6 +51,10 @@ public class C2SRtsRotateBlockMessage implements IMessage {
 
         @Override
         public IMessage onMessage(C2SRtsRotateBlockMessage msg, MessageContext ctx) {
+            EntityPlayerMP player = ctx.getServerHandler().playerEntity;
+            if (player == null) return null;
+
+            RtsStorageManager.rotateBlock(player, msg.getPosX(), msg.getPosY(), msg.getPosZ());
             return null;
         }
     }

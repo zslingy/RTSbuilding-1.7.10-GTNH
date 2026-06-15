@@ -9,6 +9,9 @@ import io.netty.buffer.ByteBuf;
 
 public class S2CRtsMineProgressMessage implements IMessage {
 
+    /** RTS 挖掘进度渲染用实体 ID（ASCII "RTS"），与原版 RTSbuilding 1.21.1 一致 */
+    private static final int RTS_MINE_RENDER_ID = 0x525453;
+
     private int posX, posY, posZ;
     private byte stage;
 
@@ -58,22 +61,37 @@ public class S2CRtsMineProgressMessage implements IMessage {
         @Override
         @SideOnly(Side.CLIENT)
         public IMessage onMessage(S2CRtsMineProgressMessage msg, MessageContext ctx) {
-            // Bug4修复：更新客户端挖掘进度状态，供 AnimationRenderer 渲染破坏进度覆盖层
-            com.rtsbuilding.rtsbuilding.client.RtsClientState state = com.rtsbuilding.rtsbuilding.client.RtsClientState
-                .get();
-            if (state != null && state.interaction != null) {
-                if (msg.getStage() >= 10) {
-                    // 挖掘完成 → 清除状态
-                    state.interaction.mineProgressX = -1;
-                    state.interaction.mineProgressY = -1;
-                    state.interaction.mineProgressZ = -1;
-                    state.interaction.mineProgressStage = 0;
-                } else {
-                    state.interaction.mineProgressX = msg.getPosX();
-                    state.interaction.mineProgressY = msg.getPosY();
-                    state.interaction.mineProgressZ = msg.getPosZ();
-                    state.interaction.mineProgressStage = msg.getStage();
-                }
+            net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getMinecraft();
+            if (mc.theWorld == null) return null;
+
+            int x = msg.getPosX(), y = msg.getPosY(), z = msg.getPosZ();
+            int stage = msg.getStage();
+
+            // 更新 InteractionViewModel 进度状态（供 UltiminePanel 进度条显示）
+            com.rtsbuilding.rtsbuilding.client.InteractionViewModel ivm = com.rtsbuilding.rtsbuilding.client.RtsClientState
+                .get().interaction;
+
+            if (stage < 0) {
+                // stage < 0 表示清除裂纹动画(abort)
+                mc.theWorld.destroyBlockInWorldPartially(RTS_MINE_RENDER_ID, x, y, z, -1);
+                ivm.mineProgressX = -1;
+                ivm.mineProgressY = -1;
+                ivm.mineProgressZ = -1;
+                ivm.mineProgressStage = 0;
+            } else if (stage >= 10) {
+                // 挖掘完成 → 清除裂纹
+                mc.theWorld.destroyBlockInWorldPartially(RTS_MINE_RENDER_ID, x, y, z, -1);
+                ivm.mineProgressX = -1;
+                ivm.mineProgressY = -1;
+                ivm.mineProgressZ = -1;
+                ivm.mineProgressStage = 0;
+            } else {
+                // 更新裂纹阶段 (0-9)
+                mc.theWorld.destroyBlockInWorldPartially(RTS_MINE_RENDER_ID, x, y, z, Math.min(9, stage));
+                ivm.mineProgressX = x;
+                ivm.mineProgressY = y;
+                ivm.mineProgressZ = z;
+                ivm.mineProgressStage = (byte) stage;
             }
             return null;
         }

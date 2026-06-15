@@ -12,7 +12,7 @@ import cpw.mods.fml.common.eventhandler.SubscribeEvent;
 
 /**
  * RTS 世界叠加层调度器 — 替代原 RtsVisualOverlayRenderer。
- * 注册到 Forge RenderWorldLastEvent，调度 5 个子渲染器。
+ * 注册到 Forge RenderWorldLastEvent，调度 4 个子渲染器。
  */
 public class RtsWorldRenderer {
 
@@ -21,7 +21,6 @@ public class RtsWorldRenderer {
     private final StorageHighlightRenderer storageHighlightRenderer;
     private final InteractionTargetRenderer interactionTargetRenderer;
     private final ShapeGhostRenderer shapeGhostRenderer;
-    private final AnimationRenderer animationRenderer;
 
     private boolean active = false;
 
@@ -31,7 +30,6 @@ public class RtsWorldRenderer {
         this.storageHighlightRenderer = new StorageHighlightRenderer();
         this.interactionTargetRenderer = new InteractionTargetRenderer();
         this.shapeGhostRenderer = new ShapeGhostRenderer();
-        this.animationRenderer = new AnimationRenderer();
     }
 
     public void setActive(boolean active) {
@@ -45,7 +43,6 @@ public class RtsWorldRenderer {
     @SubscribeEvent
     public void onRenderWorldLast(RenderWorldLastEvent event) {
         if (!active) return;
-        if (!state.camera.hasBounds()) return;
 
         Minecraft mc = Minecraft.getMinecraft();
         net.minecraft.entity.EntityLivingBase renderView = mc.renderViewEntity;
@@ -77,13 +74,17 @@ public class RtsWorldRenderer {
         GL11.glLineWidth(2.0f);
 
         boundaryRenderer.render(state);
+        // P2-5: 区块边界渲染（chunkViewActive时显示3x3区块边界）
+        if (state.interaction.chunkViewActive) {
+            boundaryRenderer.renderChunkBoundaries(state);
+        }
+        boundaryRenderer.renderFunnelBounds(state);
         storageHighlightRenderer.render(state);
         interactionTargetRenderer.render(state);
         ShapeGhostRenderer.ShapesRenderData ghost = shapeGhostRenderer.computeShapes(state);
         if (!ghost.blocks.isEmpty()) {
             shapeGhostRenderer.renderShapesAbs(ghost);
         }
-        animationRenderer.render(state, event.partialTicks);
 
         GL11.glEnable(GL11.GL_LIGHTING);
         GL11.glEnable(GL11.GL_TEXTURE_2D);

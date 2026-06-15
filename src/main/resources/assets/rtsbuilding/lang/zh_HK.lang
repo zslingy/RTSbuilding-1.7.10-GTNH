@@ -165,6 +165,7 @@ screen.rtsbuilding.quick_build.mode_destroy=範圍破壞
 screen.rtsbuilding.quick_build.shape=形狀
 screen.rtsbuilding.quick_build.fill=填充
 screen.rtsbuilding.quick_build.rotation=旋轉
+screen.rtsbuilding.quick_build.cylinder=圓柱
 screen.rtsbuilding.quick_build.materials=材料：%s 個方塊
 screen.rtsbuilding.quick_build.destroy_hint=右鍵設 A/B，滾輪調高，再右鍵確認
 screen.rtsbuilding.ultimine.title=連鎖挖掘

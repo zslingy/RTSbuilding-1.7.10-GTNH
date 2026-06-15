@@ -20,10 +20,10 @@ import com.rtsbuilding.rtsbuilding.client.panel.RtsBottomPanel;
 public class StorageCategoryView implements IRtsPanel {
 
     private static final String PANEL_NAME = "storage_category";
-    private static final int TAB_WIDTH = 124;
-    private static final int TAB_HEIGHT = 16;
-    private static final int TAB_SPACING = 2;
-    private static final int ALWAYS_VISIBLE = 5;
+    private static final int TAB_WIDTH = 62;
+    private static final int TAB_HEIGHT = 8;
+    private static final int TAB_SPACING = 1;
+    private static final int ALWAYS_VISIBLE = 0;
     private static final float ANIM_SPEED = 0.15f;
 
     private static final String[][] CATEGORIES = { { "all", "ALL" }, { "blocks", "BLOCKS" }, { "items", "ITEMS" },
@@ -124,7 +124,10 @@ public class StorageCategoryView implements IRtsPanel {
         }
 
         int startY = toggleY + TAB_HEIGHT + TAB_SPACING;
+        // 修复: 只检查可见分类
+        int displayCount = Math.round(animProgress);
         for (int i = 0; i < CATEGORIES.length; i++) {
+            if (i >= displayCount - 1) break;
             int ty = startY + i * (TAB_HEIGHT + TAB_SPACING);
             if (mouseX >= catX && mouseX <= catX + TAB_WIDTH && mouseY >= ty && mouseY <= ty + TAB_HEIGHT) {
                 state.storage.activeCategory = CATEGORIES[i][0];

@@ -11,7 +11,6 @@ import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.tileentity.TileEntity;
-import net.minecraft.util.ResourceLocation;
 import net.minecraftforge.common.util.ForgeDirection;
 
 import com.rtsbuilding.rtsbuilding.compat.ae2.RtsAe2Compat;
@@ -37,8 +36,15 @@ public class RtsStorageSession {
     private int linkedZ = -1;
     private int linkedDimId = 0;
 
-    // Bug3修复：存储链接模式（0=NORMAL/可存可取, 1=EXTRACT_ONLY/仅提取）
-    private byte linkMode = 0;
+    // === 多容器链接支持（对齐原版 linkedStorages 列表） ===
+    /** 已链接存储方块的稳定引用列表（支持多个容器） */
+    private final List<LinkedStorageRef> linkedStorages = new ArrayList<>();
+
+    /** 每个链接的模式：0=NORMAL(可存可取), 1=EXTRACT_ONLY(仅提取) */
+    private final Map<LinkedStorageRef, Byte> linkedModes = new HashMap<>();
+
+    /** 每个链接的优先级（插入时高优先级优先，提取时低优先级优先） */
+    private final Map<LinkedStorageRef, Integer> linkedPriorities = new HashMap<>();
 
     // Bug1.2修复：自动存入 mined drops
     private static final String NBT_AUTO_STORE = "autoStoreMinedDrops";
@@ -54,28 +60,77 @@ public class RtsStorageSession {
 
     public void writeToNBT(NBTTagCompound root) {
         root.setBoolean(NBT_AUTO_STORE, autoStoreMinedDrops);
+        root.setInteger("funnelRangeSize", funnelRangeSize);
+
+        // 持久化已链接存储列表
+        net.minecraft.nbt.NBTTagList linkedList = new net.minecraft.nbt.NBTTagList();
+        for (LinkedStorageRef ref : linkedStorages) {
+            net.minecraft.nbt.NBTTagCompound entry = new net.minecraft.nbt.NBTTagCompound();
+            entry.setInteger("dim", ref.dimension);
+            entry.setInteger("x", ref.x);
+            entry.setInteger("y", ref.y);
+            entry.setInteger("z", ref.z);
+            entry.setByte("mode", linkedModes.getOrDefault(ref, (byte) 0));
+            entry.setInteger("priority", linkedPriorities.getOrDefault(ref, 0));
+            linkedList.appendTag(entry);
+        }
+        root.setTag("linked_entries", linkedList);
     }
 
     public void readFromNBT(NBTTagCompound root) {
         autoStoreMinedDrops = root.getBoolean(NBT_AUTO_STORE);
+        if (root.hasKey("funnelRangeSize")) {
+            funnelRangeSize = clampFunnelRange(root.getInteger("funnelRangeSize"));
+        }
+
+        // 读取已链接存储列表
+        linkedStorages.clear();
+        linkedModes.clear();
+        linkedPriorities.clear();
+        if (root.hasKey("linked_entries", 9)) { // 9 = TAG_LIST
+            net.minecraft.nbt.NBTTagList linkedList = root.getTagList("linked_entries", 10); // 10 = TAG_COMPOUND
+            for (int i = 0; i < linkedList.tagCount(); i++) {
+                net.minecraft.nbt.NBTTagCompound entry = linkedList.getCompoundTagAt(i);
+                int dim = entry.getInteger("dim");
+                int x = entry.getInteger("x");
+                int y = entry.getInteger("y");
+                int z = entry.getInteger("z");
+                byte mode = entry.getByte("mode");
+                int priority = entry.getInteger("priority");
+                LinkedStorageRef ref = new LinkedStorageRef(dim, x, y, z);
+                linkedStorages.add(ref);
+                linkedModes.put(ref, mode);
+                linkedPriorities.put(ref, priority);
+            }
+        }
     }
 
-    // === 阶段6后续: 普通容器绑定坐标（-1 表示未绑定） ===
-    private int containerX = -1;
-    private int containerY = -1;
-    private int containerZ = -1;
-    private int containerDimId = 0;
-    private boolean containerLinked = false;
+    // === 阶段6后续: 容器链接已由 linkedStorages 列表管理 ===
 
     private boolean funnelActive = false;
     private int funnelTargetSlot = -1;
     /** Bug5修复：漏斗目标世界坐标（鼠标指向位置） */
     private double funnelTargetX, funnelTargetY, funnelTargetZ;
     private boolean funnelHasPosition = false;
+    private int funnelRangeSize = 5;
+
+    private final GuiBinding[] guiBindings = new GuiBinding[8];
 
     private final java.util.Map<Integer, net.minecraft.item.ItemStack> quickSlots = new java.util.HashMap<>();
 
     public RtsStorageSession() {}
+
+    /**
+     * 规范化物品 ID：确保所有条目使用统一格式。
+     * 1.7.10 注册表同时接受 "stone" 和 "minecraft:stone"，此方法统一为带命名空间格式。
+     */
+    public static String normalizeItemId(String rawId) {
+        if (rawId == null || rawId.isEmpty()) return "";
+        String lower = rawId.toLowerCase()
+            .trim();
+        if (lower.contains(":")) return lower;
+        return "minecraft:" + lower;
+    }
 
     // ======== 基本操作 ========
 
@@ -85,6 +140,7 @@ public class RtsStorageSession {
     }
 
     public void addItem(String itemId, int meta, long amount) {
+        itemId = normalizeItemId(itemId);
         String key = itemId + "@" + meta;
         long current = getCount(itemId);
         itemCounts.put(itemId, current + amount);
@@ -107,6 +163,7 @@ public class RtsStorageSession {
     public boolean tryConsume(String itemId, int meta, long amount) {
         if (itemId == null || amount <= 0) return false;
 
+        itemId = normalizeItemId(itemId);
         String key = itemId + "@" + meta;
         StorageEntry entry = entries.get(key);
         if (entry == null || entry.count < amount) return false;
@@ -163,7 +220,6 @@ public class RtsStorageSession {
         this.linkedY = -1;
         this.linkedZ = -1;
         this.linkedDimId = 0;
-        this.linkMode = 0;
     }
 
     public int getLinkedX() {
@@ -182,13 +238,10 @@ public class RtsStorageSession {
         return linkedDimId;
     }
 
-    // Bug3修复：链接模式 getter/setter
-    public byte getLinkMode() {
-        return linkMode;
-    }
-
+    /** 设置链接模式（已废弃，请使用 addLinkedStorage / setLinkedMode） */
+    @Deprecated
     public void setLinkMode(byte mode) {
-        this.linkMode = mode;
+        // no-op: 模式现在存储在 linkedModes map 中
     }
 
     /**
@@ -227,17 +280,17 @@ public class RtsStorageSession {
 
         List<Ae2StorageEntry> ae2Items = RtsAe2Compat.queryAllItems(te, side);
         for (Ae2StorageEntry ae : ae2Items) {
-            addItem(ae.itemId, ae.meta, ae.count);
+            addItem(normalizeItemId(ae.itemId), ae.meta, ae.count);
         }
 
         return !ae2Items.isEmpty();
     }
 
-    // ======== 阶段6后续: 普通容器链接 ========
+    // ======== 多容器链接管理 ========
 
-    /** 普通容器是否已绑定 */
+    /** 是否链接了任何容器（不含 AE2） */
     public boolean isContainerLinked() {
-        return containerLinked && containerX >= 0;
+        return !linkedStorages.isEmpty();
     }
 
     /** 是否链接了任何存储（AE2 或容器） */
@@ -245,39 +298,62 @@ public class RtsStorageSession {
         return isAe2Linked() || isContainerLinked();
     }
 
-    /** 设置容器绑定坐标 */
-    public void setContainerLink(int x, int y, int z, int dimId) {
-        this.containerX = x;
-        this.containerY = y;
-        this.containerZ = z;
-        this.containerDimId = dimId;
-        this.containerLinked = true;
+    /** 获取所有已链接的存储引用（不可修改列表） */
+    public List<LinkedStorageRef> getLinkedStorages() {
+        return java.util.Collections.unmodifiableList(linkedStorages);
     }
 
-    /** 清除容器绑定 */
+    /** 添加一个链接存储 */
+    public void addLinkedStorage(LinkedStorageRef ref, byte mode, int priority) {
+        if (!linkedStorages.contains(ref)) {
+            linkedStorages.add(ref);
+        }
+        linkedModes.put(ref, mode);
+        linkedPriorities.put(ref, priority);
+    }
+
+    /** 移除一个链接存储 */
+    public boolean removeLinkedStorage(LinkedStorageRef ref) {
+        boolean removed = linkedStorages.remove(ref);
+        linkedModes.remove(ref);
+        linkedPriorities.remove(ref);
+        return removed;
+    }
+
+    /** 检查是否已链接指定位置 */
+    public boolean hasLinkedStorage(LinkedStorageRef ref) {
+        return linkedStorages.contains(ref);
+    }
+
+    /** 获取链接模式 */
+    public byte getLinkedMode(LinkedStorageRef ref) {
+        return linkedModes.getOrDefault(ref, (byte) 0);
+    }
+
+    /** 设置链接模式 */
+    public void setLinkedMode(LinkedStorageRef ref, byte mode) {
+        if (linkedStorages.contains(ref)) {
+            linkedModes.put(ref, mode);
+        }
+    }
+
+    /** 获取链接优先级 */
+    public int getLinkedPriority(LinkedStorageRef ref) {
+        return linkedPriorities.getOrDefault(ref, 0);
+    }
+
+    /** 设置链接优先级 */
+    public void setLinkedPriority(LinkedStorageRef ref, int priority) {
+        if (linkedStorages.contains(ref)) {
+            linkedPriorities.put(ref, priority);
+        }
+    }
+
+    /** 清除所有容器链接 */
     public void clearContainerLink() {
-        this.containerX = -1;
-        this.containerY = -1;
-        this.containerZ = -1;
-        this.containerDimId = 0;
-        this.containerLinked = false;
-        this.linkMode = 0;
-    }
-
-    public int getContainerX() {
-        return containerX;
-    }
-
-    public int getContainerY() {
-        return containerY;
-    }
-
-    public int getContainerZ() {
-        return containerZ;
-    }
-
-    public int getContainerDimId() {
-        return containerDimId;
+        linkedStorages.clear();
+        linkedModes.clear();
+        linkedPriorities.clear();
     }
 
     // ======== Bug7修复: 漏斗模式 ========
@@ -321,6 +397,22 @@ public class RtsStorageSession {
         return funnelTargetZ;
     }
 
+    public int getFunnelRangeSize() {
+        return funnelRangeSize;
+    }
+
+    public GuiBinding[] getGuiBindings() {
+        return guiBindings;
+    }
+
+    public void setFunnelRangeSize(int rangeSize) {
+        this.funnelRangeSize = clampFunnelRange(rangeSize);
+    }
+
+    private static int clampFunnelRange(int rangeSize) {
+        return Math.max(1, Math.min(16, rangeSize));
+    }
+
     // ======== Bug9修复: 快捷存储槽（Pin 槽） ========
 
     public static final int QUICK_SLOT_COUNT = 9;
@@ -355,7 +447,7 @@ public class RtsStorageSession {
             String itemId = (String) GameData.getItemRegistry()
                 .getNameForObject(stack.getItem());
             if (itemId == null) continue;
-            addItem(itemId, stack.getItemDamage(), stack.stackSize);
+            addItem(normalizeItemId(itemId), stack.getItemDamage(), stack.stackSize);
         }
     }
 
@@ -426,6 +518,47 @@ public class RtsStorageSession {
         addItem("minecraft:lava_bucket", 0, 2);
     }
 
+    // ======== 新增方法 ========
+
+    /** 检查存储是否为空 */
+    public boolean isEmpty() {
+        return entries.isEmpty();
+    }
+
+    /**
+     * 扫描玩家非快捷栏背包(9-35格)。
+     * 将背包物品添加到存储会话。
+     */
+    public void scanPlayerInventory(net.minecraft.entity.player.EntityPlayer player) {
+        if (player == null) return;
+        // 只扫描非快捷栏(9-35)，共27格
+        for (int i = 9; i < 36; i++) {
+            ItemStack stack = player.inventory.getStackInSlot(i);
+            if (stack != null && stack.getItem() != null) {
+                String itemId = (String) GameData.getItemRegistry()
+                    .getNameForObject(stack.getItem());
+                if (itemId != null) {
+                    addItem(normalizeItemId(itemId), stack.getItemDamage(), stack.stackSize);
+                }
+            }
+        }
+    }
+
+    /**
+     * 扫描所有已绑定的普通容器。
+     * 遍历 linkedStorages 列表中的每个引用，将容器内容添加到存储会话。
+     */
+    public void scanLinkedContainers(net.minecraft.world.World world) {
+        if (world == null) return;
+        for (LinkedStorageRef ref : linkedStorages) {
+            if (ref.x < 0 || ref.y < 0 || ref.z < 0) continue;
+            TileEntity te = world.getTileEntity(ref.x, ref.y, ref.z);
+            if (te instanceof IInventory) {
+                scanContainerInventory((IInventory) te);
+            }
+        }
+    }
+
     // ======== 分页查询 ========
 
     /**
@@ -477,22 +610,106 @@ public class RtsStorageSession {
 
     public List<ItemStack> toItemStacks(List<StorageEntry> entryList) {
         List<ItemStack> stacks = new ArrayList<>();
+        int failed = 0;
         for (StorageEntry e : entryList) {
             ItemStack stack = resolveStack(e.itemId, e.meta);
             if (stack != null) {
                 stack.stackSize = (int) Math.min(e.count, Integer.MAX_VALUE);
                 stacks.add(stack);
+            } else {
+                failed++;
             }
         }
+        // [调试日志] Issue 1: 转换结果
+        com.rtsbuilding.rtsbuilding.RtsbuildingMod.LOGGER.debug(
+            "RtsStorageSession.toItemStacks: input={} output={} failed={}",
+            entryList.size(),
+            stacks.size(),
+            failed);
         return stacks;
     }
 
     private ItemStack resolveStack(String itemId, int meta) {
         try {
+            // 1.7.10 注册表使用不带前缀的名称，先去除 "minecraft:" 前缀
+            String lookupId = itemId;
+            if (lookupId != null && lookupId.startsWith("minecraft:")) {
+                lookupId = lookupId.substring("minecraft:".length());
+            }
+
+            // 尝试1: 不带前缀的名称
             Item item = (Item) GameData.getItemRegistry()
-                .getObject(new ResourceLocation(itemId));
+                .getObject(lookupId);
             if (item != null) return new ItemStack(item, 1, meta);
-        } catch (Exception ignored) {}
+
+            // 尝试2: 带前缀的原始名称
+            if (!lookupId.equals(itemId)) {
+                item = (Item) GameData.getItemRegistry()
+                    .getObject(itemId);
+                if (item != null) return new ItemStack(item, 1, meta);
+            }
+
+            // 尝试3: Block注册表（不带前缀）
+            net.minecraft.block.Block block = (net.minecraft.block.Block) GameData.getBlockRegistry()
+                .getObject(lookupId);
+            if (block != null) {
+                Item blockItem = net.minecraft.item.Item.getItemFromBlock(block);
+                if (blockItem != null) return new ItemStack(blockItem, 1, meta);
+            }
+
+            // 尝试4: Block注册表（带前缀）
+            if (!lookupId.equals(itemId)) {
+                block = (net.minecraft.block.Block) GameData.getBlockRegistry()
+                    .getObject(itemId);
+                if (block != null) {
+                    Item blockItem = net.minecraft.item.Item.getItemFromBlock(block);
+                    if (blockItem != null) return new ItemStack(blockItem, 1, meta);
+                }
+            }
+
+            // 尝试5: 1.7.10 遗留名称映射（minecraft:lapis_lazuli → dye:4 等）
+            String[] legacyMapping = LEGACY_NAMES.get(lookupId);
+            if (legacyMapping != null) {
+                String legacyId = legacyMapping[0];
+                int legacyMeta = legacyMapping.length > 1 ? Integer.parseInt(legacyMapping[1]) : meta;
+
+                item = (Item) GameData.getItemRegistry()
+                    .getObject(legacyId);
+                if (item != null) {
+                    com.rtsbuilding.rtsbuilding.RtsbuildingMod.LOGGER.debug(
+                        "RtsStorageSession.resolveStack: LEGACY mapping {} → {}:{}",
+                        itemId,
+                        legacyId,
+                        legacyMeta);
+                    return new ItemStack(item, 1, legacyMeta);
+                }
+
+                // 也尝试 block 注册表
+                block = (net.minecraft.block.Block) GameData.getBlockRegistry()
+                    .getObject(legacyId);
+                if (block != null) {
+                    Item blockItem = net.minecraft.item.Item.getItemFromBlock(block);
+                    if (blockItem != null) {
+                        com.rtsbuilding.rtsbuilding.RtsbuildingMod.LOGGER.debug(
+                            "RtsStorageSession.resolveStack: LEGACY mapping {} → block:{}:{}",
+                            itemId,
+                            legacyId,
+                            legacyMeta);
+                        return new ItemStack(blockItem, 1, legacyMeta);
+                    }
+                }
+            }
+
+            // 所有尝试均失败
+            com.rtsbuilding.rtsbuilding.RtsbuildingMod.LOGGER
+                .debug("RtsStorageSession.resolveStack: FAILED itemId={} lookupId={} meta={}", itemId, lookupId, meta);
+        } catch (Exception e) {
+            com.rtsbuilding.rtsbuilding.RtsbuildingMod.LOGGER.debug(
+                "RtsStorageSession.resolveStack: EXCEPTION itemId={} meta={} error={}",
+                itemId,
+                meta,
+                e.getMessage());
+        }
         return null;
     }
 
@@ -635,6 +852,24 @@ public class RtsStorageSession {
     }
 
     // ======== 数据类 ========
+
+    /**
+     * 1.7.10 遗留物品名称映射：modern itemId (不带前缀) → {legacyId, legacyMeta}。
+     * 现代 MC 的部分物品名称/元数据在 1.7.10 中不同，需要映射。
+     */
+    private static final Map<String, String[]> LEGACY_NAMES = new HashMap<>();
+    static {
+        // 青金石：现代 minecraft:lapis_lazuli → 1.7.10 dye:4
+        LEGACY_NAMES.put("lapis_lazuli", new String[] { "dye", "4" });
+        // 木头：现代 minecraft:oak_log → 1.7.10 log:0
+        LEGACY_NAMES.put("oak_log", new String[] { "log", "0" });
+        // 木板：现代 minecraft:oak_planks → 1.7.10 planks:0
+        LEGACY_NAMES.put("oak_planks", new String[] { "planks", "0" });
+        // 石砖：现代 minecraft:stone_bricks → 1.7.10 stonebrick:0
+        LEGACY_NAMES.put("stone_bricks", new String[] { "stonebrick", "0" });
+        // 红砖：现代 minecraft:bricks → 1.7.10 brick_block:0
+        LEGACY_NAMES.put("bricks", new String[] { "brick_block", "0" });
+    }
 
     /** 存储条目 */
     public static class StorageEntry {

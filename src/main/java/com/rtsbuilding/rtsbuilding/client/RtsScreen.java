@@ -16,6 +16,7 @@ import com.rtsbuilding.rtsbuilding.client.panel.IRtsPanel;
 import com.rtsbuilding.rtsbuilding.client.panel.RtsBottomPanel;
 import com.rtsbuilding.rtsbuilding.client.panel.RtsTopBarPanel;
 import com.rtsbuilding.rtsbuilding.client.panel.RtsWindowPanel;
+import com.rtsbuilding.rtsbuilding.client.panel.funnel.FunnelPanel;
 import com.rtsbuilding.rtsbuilding.client.panel.quickbuild.QuickBuildPanel;
 import com.rtsbuilding.rtsbuilding.client.panel.storage.RecentGridView;
 import com.rtsbuilding.rtsbuilding.client.panel.storage.StorageCategoryView;
@@ -62,6 +63,7 @@ public class RtsScreen extends GuiScreen {
     /** Bug2修复：快速建造/连锁挖掘窗口面板 */
     private final QuickBuildPanel quickBuildPanel;
     private final UltiminePanel ultiminePanel;
+    private final FunnelPanel funnelPanel;
 
     /** 上一次请求的页面，用于翻页时重新请求 */
     private int lastRequestedPage = -1;
@@ -94,6 +96,7 @@ public class RtsScreen extends GuiScreen {
         this.gearMenuPanel = new GearMenuPanel();
         this.quickBuildPanel = new QuickBuildPanel();
         this.ultiminePanel = new UltiminePanel();
+        this.funnelPanel = new FunnelPanel();
     }
 
     @Override
@@ -122,6 +125,7 @@ public class RtsScreen extends GuiScreen {
         // ---- Bug2修复: 快速建造+连锁挖掘窗口面板 ----
         addPanel(quickBuildPanel);
         addPanel(ultiminePanel);
+        addPanel(funnelPanel);
 
         // ---- 阶段6: 蓝图面板 ----
         addPanel(new BlueprintPanel());
@@ -274,9 +278,20 @@ public class RtsScreen extends GuiScreen {
         lastFunnelTargetZ = tz;
         hasLastFunnelTarget = true;
         funnelCooldownTicks = 2;
+        state.interaction.funnelHasTarget = true;
+        state.interaction.funnelTargetX = tx;
+        state.interaction.funnelTargetY = ty;
+        state.interaction.funnelTargetZ = tz;
 
         RtsNetworkManager.NETWORK.sendToServer(
-            new com.rtsbuilding.rtsbuilding.network.storage.C2SRtsSetFunnelMessage(0, 0, tx, ty, tz, true));
+            new com.rtsbuilding.rtsbuilding.network.storage.C2SRtsSetFunnelMessage(
+                0,
+                0,
+                tx,
+                ty,
+                tz,
+                true,
+                state.interaction.funnelRangeSize));
     }
 
     @Override
@@ -434,16 +449,20 @@ public class RtsScreen extends GuiScreen {
                 middleMouseDown = false;
             }
 
-            // Bug2修复：检测左键释放 → 发送挖掘 abort（exclude same-tick race）
+            // 检测左键释放 → 发送挖掘 abort
             if (!Mouse.isButtonDown(0) && leftMouseDown) {
                 leftMouseDown = false;
-                // 连锁挖掘模式下不发送abort（渐进式由服务端状态机管理）
-                if (!state.interaction.ultimineActive) {
-                    int currentTick = state.camera.cameraMoveHeartbeatTicks;
-                    if (mineStartedTick >= 0 && (currentTick - mineStartedTick) >= 1) {
-                        interactionHandler.abortMine();
-                    }
-                }
+                // P0-3: 无论连锁模式与否，左键释放时总是发送abort
+                // 连锁挖掘的持续性由 C2SRtsUltimineMessage 独立管理
+                interactionHandler.abortMine();
+                // 立即清除客户端裂纹状态
+                state.interaction.mineProgressX = -1;
+                state.interaction.mineProgressY = -1;
+                state.interaction.mineProgressZ = -1;
+                state.interaction.mineProgressStage = 0;
+                // 清除连锁挖掘进度
+                state.interaction.ultimineProgressProcessed = -1;
+                state.interaction.ultimineProgressTotal = 0;
                 mineStartedTick = -1;
             }
         }
@@ -455,6 +474,15 @@ public class RtsScreen extends GuiScreen {
             int mouseX = (int) ((Mouse.getEventX() * width / mc.displayWidth) * invZoom);
             int mouseY = (int) ((height - Mouse.getEventY() * height / mc.displayHeight - 1) * invZoom);
             inputRouter.dispatchScroll(mouseX, mouseY, scroll > 0 ? 1 : -1);
+
+            // 修复: 快速建造NEED_HEIGHT阶段滚轮调整高度偏移
+            if (state.interaction.quickBuildActive && state.interaction.shapeBuildSession != null
+                && state.interaction.shapeBuildSession.phase
+                    == com.rtsbuilding.rtsbuilding.client.panel.quickbuild.ShapeBuildPhase.NEED_HEIGHT) {
+                state.interaction.shapeBuildSession.heightOffset += (scroll > 0 ? 1 : -1);
+                state.interaction.shapeBuildSession.heightOffset = Math
+                    .max(-32, Math.min(32, state.interaction.shapeBuildSession.heightOffset));
+            }
         }
 
         // Bug1修复：齿轮面板拖拽更新
@@ -566,6 +594,10 @@ public class RtsScreen extends GuiScreen {
     /** Bug2修复：获取连锁挖掘面板 */
     public UltiminePanel getUltiminePanel() {
         return ultiminePanel;
+    }
+
+    public FunnelPanel getFunnelPanel() {
+        return funnelPanel;
     }
 
     /** Bug2修复：向所有窗口面板分发拖拽/释放事件 */

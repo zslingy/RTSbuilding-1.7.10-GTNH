@@ -4,7 +4,6 @@ import net.minecraft.entity.player.EntityPlayerMP;
 
 import com.rtsbuilding.rtsbuilding.network.RtsNetworkManager;
 import com.rtsbuilding.rtsbuilding.server.RtsStorageManager;
-import com.rtsbuilding.rtsbuilding.server.storage.RtsStorageSession;
 
 import cpw.mods.fml.common.network.simpleimpl.IMessage;
 import cpw.mods.fml.common.network.simpleimpl.IMessageHandler;
@@ -83,15 +82,16 @@ public class C2SRtsLinkStorageMessage implements IMessage {
                 .linkStorage(player, m.getPosX(), m.getPosY(), m.getPosZ(), m.getLinkMode());
 
             if (success) {
-                RtsStorageSession session = RtsStorageManager.getSession(player);
-                RtsStorageManager.tryPopulateFromAe2(player, session);
-
+                // 发送链接状态（简单布尔值，linkedEntries 由 sendStoragePage 携带）
                 S2CRtsLinkStorageStatusMessage response = new S2CRtsLinkStorageStatusMessage(
                     m.getPosX(),
                     m.getPosY(),
                     m.getPosZ(),
                     true);
                 RtsNetworkManager.NETWORK.sendTo(response, player);
+
+                // 立即发送存储页面数据给客户端（携带 items + linkedEntries）
+                RtsStorageManager.sendStoragePage(player, 0, 0);
             } else {
                 S2CRtsLinkStorageStatusMessage response = new S2CRtsLinkStorageStatusMessage(
                     m.getPosX(),

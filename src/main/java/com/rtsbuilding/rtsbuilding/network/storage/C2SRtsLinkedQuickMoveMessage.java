@@ -40,6 +40,7 @@ public class C2SRtsLinkedQuickMoveMessage implements IMessage {
 
         @Override
         public IMessage onMessage(C2SRtsLinkedQuickMoveMessage m, MessageContext c) {
+            // TODO: 实现从链接存储快速移动物品到背包的功能
             return null;
         }
     }

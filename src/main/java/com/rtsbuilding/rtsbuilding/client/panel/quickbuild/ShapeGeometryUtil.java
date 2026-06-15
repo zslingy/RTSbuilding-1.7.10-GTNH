@@ -20,7 +20,8 @@ public final class ShapeGeometryUtil {
     public static final int SHAPE_MAX_RADIUS = 32;
     public static final int SHAPE_ROTATE_STEP_DEGREES = 15;
 
-    public static List<BlockPos> buildShapePositions(ShapeBuildSession session, ShapeFillMode fillMode) {
+    public static List<BlockPos> buildShapePositions(ShapeBuildSession session, ShapeFillMode fillMode,
+        boolean lineSnap8Dir) {
         if (session == null || session.pointA == null) return new ArrayList<>();
         BlockPos pointB = session.pointB != null ? session.pointB : session.pointA;
         return buildShapePositions(
@@ -31,24 +32,25 @@ public final class ShapeGeometryUtil {
             session.heightOffset,
             session.rotationDegrees,
             session.cylinder,
-            fillMode);
+            fillMode,
+            lineSnap8Dir);
     }
 
     public static List<BlockPos> buildShapePositions(BuildShape shape, int clickedFace, BlockPos start, BlockPos end,
-        int heightOffset, int rotationDegrees, boolean cylinder, ShapeFillMode fillMode) {
+        int heightOffset, int rotationDegrees, boolean cylinder, ShapeFillMode fillMode, boolean lineSnap8Dir) {
         LinkedHashSet<BlockPos> targets = new LinkedHashSet<>();
         if (shape == null) shape = BuildShape.BLOCK;
         if (fillMode == null) fillMode = ShapeFillMode.FILL;
 
         switch (shape) {
             case LINE:
-                addLineTargets(targets, start, end);
+                addLineTargets(targets, start, end, lineSnap8Dir);
                 break;
             case SQUARE:
                 addSquareTargets(targets, start, end, ForgeDirection.UP, fillMode, rotationDegrees);
                 break;
             case WALL:
-                addWallTargets(targets, start, end, heightOffset, fillMode);
+                addWallTargets(targets, start, end, heightOffset, fillMode, lineSnap8Dir);
                 break;
             case CIRCLE:
                 if (cylinder) {
@@ -105,10 +107,22 @@ public final class ShapeGeometryUtil {
         return (normalized / SHAPE_ROTATE_STEP_DEGREES) * SHAPE_ROTATE_STEP_DEGREES;
     }
 
-    private static void addLineTargets(Set<BlockPos> targets, BlockPos start, BlockPos end) {
+    private static void addLineTargets(Set<BlockPos> targets, BlockPos start, BlockPos end, boolean snap8Dir) {
         int dx = end.getX() - start.getX();
         int dy = end.getY() - start.getY();
         int dz = end.getZ() - start.getZ();
+
+        // P1-1: 8向角度吸附（22.5°阈值，实时吸附）
+        if (snap8Dir && (dx != 0 || dz != 0)) {
+            double angle = Math.atan2(dz, dx); // [-PI, PI]
+            double deg = Math.toDegrees(angle); // [-180, 180]
+            double snapped = Math.round(deg / 45.0) * 45.0;
+            double rad = Math.toRadians(snapped);
+            double dist = Math.sqrt(dx * dx + dz * dz);
+            dx = (int) Math.round(Math.cos(rad) * dist);
+            dz = (int) Math.round(Math.sin(rad) * dist);
+        }
+
         int steps = Math.max(Math.abs(dx), Math.max(Math.abs(dy), Math.abs(dz)));
         if (steps <= 0) {
             targets.add(start);
@@ -143,9 +157,11 @@ public final class ShapeGeometryUtil {
     }
 
     private static void addWallTargets(Set<BlockPos> targets, BlockPos start, BlockPos end, int heightOffset,
-        ShapeFillMode fillMode) {
+        ShapeFillMode fillMode, boolean lineSnap8Dir) {
         LinkedHashSet<BlockPos> baseLine = new LinkedHashSet<>();
-        addLineTargets(baseLine, start, new BlockPos(end.getX(), start.getY(), end.getZ()));
+        // WALL的底边线使用与LINE相同的8向吸附逻辑
+        BlockPos wallEnd = new BlockPos(end.getX(), start.getY(), end.getZ());
+        addLineTargets(baseLine, start, wallEnd, lineSnap8Dir);
         if (baseLine.isEmpty()) baseLine.add(start);
 
         int yOffset = clampShapeOffset(heightOffset);

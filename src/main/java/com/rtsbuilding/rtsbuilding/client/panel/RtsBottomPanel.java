@@ -16,6 +16,7 @@ import net.minecraft.util.StatCollector;
 import org.lwjgl.opengl.GL11;
 
 import com.rtsbuilding.rtsbuilding.client.CraftViewModel.CraftableEntry;
+import com.rtsbuilding.rtsbuilding.client.InteractionViewModel;
 import com.rtsbuilding.rtsbuilding.client.RtsClientState;
 import com.rtsbuilding.rtsbuilding.client.RtsScreen;
 import com.rtsbuilding.rtsbuilding.client.StorageViewModel;
@@ -48,24 +49,25 @@ public class RtsBottomPanel implements IRtsPanel {
 
     public static final String PANEL_NAME = "bottom_panel";
 
-    // ── 布局常量（对齐原版 BuilderScreenConstants） ──
-    static final int PANEL_PADDING = 8;
-    static final int HEADER_H = 18;
-    static final int SORT_COL_W = 58;
-    static final int CATEGORY_W = 124;
-    static final int CATEGORY_GAP = 10;
-    static final int SLOT = 22;
-    static final int HOTBAR_SLOT = 18;
-    static final int HOTBAR_PITCH = 20;
-    static final int TOOL_AREA_H = 18;
-    static final int CRAFT_PANEL_W = 126;
-    static final int CRAFT_PANEL_GAP = 6;
-    static final int STORAGE_RECENT_GAP = 6;
+    // ── 布局常量 ──
+    static final int PANEL_PADDING = 6;
+    static final int HEADER_H = 14;
+    static final int SORT_COL_W = 44;
+    static final int CATEGORY_W = 80;
+    static final int CATEGORY_GAP = 5;
+    static final int SLOT = 14; // Issue 5: 与快捷栏格子大小一致
+    static final int HOTBAR_SLOT = 14;
+    static final int HOTBAR_PITCH = 15;
+    static final int TOOL_AREA_H = 14;
+    static final int CRAFT_PANEL_W = 95;
+    static final int CRAFT_PANEL_GAP = 5;
+    static final int STORAGE_RECENT_GAP = 5;
     static final int FLUID_COLS = 2;
+    static final int ICON_SCALE = 0; // Issue 5: 物品图标缩放标记（0.75x通过GL实现）
 
     // 合成底座常量
-    private static final int CRAFT_DOCK_C_SIZE = 18;
-    private static final int CRAFT_DOCK_SLOT_SIZE = 10;
+    private static final int CRAFT_DOCK_C_SIZE = 14;
+    private static final int CRAFT_DOCK_SLOT_SIZE = 8;
     private static final int CRAFT_DOCK_GAP = 2;
     private static final int CRAFT_DOCK_SLOT_COUNT = 8;
 
@@ -231,8 +233,8 @@ public class RtsBottomPanel implements IRtsPanel {
         contentX = panelX + PANEL_PADDING;
         contentY = panelY + HEADER_H + 4;
 
-        // 分类面板
-        categoryX = contentX + SortButtonsView.getColumnWidth() + 4;
+        // 分类面板（Issue 6: 右移避免与+/-按钮重叠）
+        categoryX = contentX + SortButtonsView.getColumnWidth() + 20;
         categoryY = contentY;
         categoryH = Math.max(24, panelY + panelH - PANEL_PADDING - categoryY);
 
@@ -395,6 +397,9 @@ public class RtsBottomPanel implements IRtsPanel {
             Gui.drawRect(sx, sy, sx + ss, sy + ss, bg);
             Gui.drawRect(sx, sy, sx + ss, sy + 1, 0xFF698097);
             Gui.drawRect(sx, sy + ss - 1, sx + ss, sy + ss, 0xFF0F151C);
+            // 在槽位中显示槽位编号 (0-7)
+            String label = String.valueOf(i);
+            fr.drawString(label, sx + ss / 2 - fr.getStringWidth(label) / 2, sy + 1, 0xFFB0B0B0);
         }
     }
 
@@ -425,9 +430,14 @@ public class RtsBottomPanel implements IRtsPanel {
             if (hasItem) {
                 GL11.glPushMatrix();
                 GL11.glEnable(GL11.GL_BLEND);
+                // Issue 5: 物品图标缩小到0.75倍
+                float iconScale = 0.75f;
+                float offset = (HOTBAR_SLOT - HOTBAR_SLOT * iconScale) / 2.0f;
+                GL11.glTranslatef(cx + offset, cy + offset, 0);
+                GL11.glScalef(iconScale, iconScale, 1.0f);
                 RenderHelper.enableGUIStandardItemLighting();
-                renderItem.renderItemAndEffectIntoGUI(fr, mc.renderEngine, stack, cx + 1, cy + 1);
-                renderItem.renderItemOverlayIntoGUI(fr, mc.renderEngine, stack, cx + 1, cy + 1);
+                renderItem.renderItemAndEffectIntoGUI(fr, mc.renderEngine, stack, 1, 1);
+                renderItem.renderItemOverlayIntoGUI(fr, mc.renderEngine, stack, 1, 1);
                 RenderHelper.disableStandardItemLighting();
                 GL11.glDisable(GL11.GL_BLEND);
                 GL11.glPopMatrix();
@@ -633,7 +643,20 @@ public class RtsBottomPanel implements IRtsPanel {
                 .sendToServer(new com.rtsbuilding.rtsbuilding.network.craft.C2SRtsOpenCraftTerminalMessage());
             return true;
         }
-        if (hoveredCraftDockSlot >= 0) return true;
+        if (hoveredCraftDockSlot >= 0) {
+            if (button == 0) {
+                // 左键：进入 GUI 绑定模式
+                InteractionViewModel ivm = state.interaction;
+                ivm.guiBindingCaptureActive = true;
+                ivm.guiBindingCaptureSlot = hoveredCraftDockSlot;
+            } else if (button == 1) {
+                // 右键：如果已绑定则直接打开 GUI
+                RtsNetworkManager.NETWORK.sendToServer(
+                    new com.rtsbuilding.rtsbuilding.network.storage.C2SRtsOpenGuiBindingMessage(
+                        (byte) hoveredCraftDockSlot));
+            }
+            return true;
+        }
 
         // 合成面板
         if (craftPanelVisible && handleCraftPanelClick(mouseX, mouseY)) return true;

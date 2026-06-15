@@ -4,7 +4,6 @@ import net.minecraft.client.Minecraft;
 
 import com.rtsbuilding.rtsbuilding.RtsbuildingMod;
 import com.rtsbuilding.rtsbuilding.client.RtsClientState;
-import com.rtsbuilding.rtsbuilding.util.BlockPos;
 
 import cpw.mods.fml.common.network.simpleimpl.IMessage;
 import cpw.mods.fml.common.network.simpleimpl.IMessageHandler;
@@ -16,6 +15,7 @@ import io.netty.buffer.ByteBuf;
 /**
  * S2C 链接存储状态消息。
  * 服务端告知客户端 AE2/容器链接是否成功。
+ * 简化版：只携带 success 标记，linkedEntries 由 S2CRtsStoragePageMessage 携带。
  */
 public class S2CRtsLinkStorageStatusMessage implements IMessage {
 
@@ -74,34 +74,21 @@ public class S2CRtsLinkStorageStatusMessage implements IMessage {
             RtsClientState state = RtsClientState.get();
             if (state == null) return null;
 
-            BlockPos pos = new BlockPos(m.getPosX(), m.getPosY(), m.getPosZ());
+            // linkedEntries 由 S2CRtsStoragePageMessage 携带，这里只标记 dirty
+            state.storage.dirty = true;
+
             if (m.isSuccess()) {
-                boolean alreadyLinked = false;
-                for (BlockPos existing : state.storage.linkedStoragePositions) {
-                    if (existing != null && existing.equals(pos)) {
-                        alreadyLinked = true;
-                        break;
-                    }
-                }
-                if (!alreadyLinked) {
-                    state.storage.linkedStoragePositions.add(pos);
-                }
-                state.storage.linkedStorageCount = state.storage.linkedStoragePositions.size();
-                state.storage.dirty = true;
-                RtsbuildingMod.LOGGER
-                    .info("Client: storage linked at ({}, {}, {})", m.getPosX(), m.getPosY(), m.getPosZ());
+                RtsbuildingMod.LOGGER.info(
+                    "Client: storage linked at ({}, {}, {}), waiting for page update",
+                    m.getPosX(),
+                    m.getPosY(),
+                    m.getPosZ());
             } else {
-                java.util.Iterator<BlockPos> it = state.storage.linkedStoragePositions.iterator();
-                while (it.hasNext()) {
-                    BlockPos existing = it.next();
-                    if (existing != null && existing.equals(pos)) {
-                        it.remove();
-                    }
-                }
-                state.storage.linkedStorageCount = state.storage.linkedStoragePositions.size();
-                state.storage.dirty = true;
-                RtsbuildingMod.LOGGER
-                    .info("Client: storage unlinked at ({}, {}, {})", m.getPosX(), m.getPosY(), m.getPosZ());
+                RtsbuildingMod.LOGGER.info(
+                    "Client: storage unlinked at ({}, {}, {}), waiting for page update",
+                    m.getPosX(),
+                    m.getPosY(),
+                    m.getPosZ());
             }
 
             return null;

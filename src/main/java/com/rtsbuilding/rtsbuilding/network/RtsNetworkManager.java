@@ -116,6 +116,12 @@ public final class RtsNetworkManager {
             com.rtsbuilding.rtsbuilding.network.builder.S2CRtsUltimineProgressMessage.class,
             disc++,
             Side.CLIENT);
+        // 问题15: 手持物品使用消息
+        NETWORK.registerMessage(
+            com.rtsbuilding.rtsbuilding.network.builder.C2SRtsUseItemMessage.Handler.class,
+            com.rtsbuilding.rtsbuilding.network.builder.C2SRtsUseItemMessage.class,
+            disc++,
+            Side.SERVER);
 
         // ---- Craft (9 messages) ----
         NETWORK.registerMessage(

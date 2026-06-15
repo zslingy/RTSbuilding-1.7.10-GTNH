@@ -10,7 +10,6 @@ import net.minecraft.world.World;
 import com.rtsbuilding.rtsbuilding.RtsbuildingMod;
 import com.rtsbuilding.rtsbuilding.server.RtsStorageManager;
 import com.rtsbuilding.rtsbuilding.server.camera.RtsCameraManager;
-import com.rtsbuilding.rtsbuilding.server.storage.RtsStorageSession;
 
 import cpw.mods.fml.common.network.ByteBufUtils;
 import cpw.mods.fml.common.network.simpleimpl.IMessage;
@@ -271,91 +270,135 @@ public class C2SRtsPlaceMessage implements IMessage {
                 meta = rotation;
             }
 
-            // 存储消耗检查：链接了存储则须从存储中扣除，否则拒绝放置
-            if (RtsStorageManager.getSession(player)
-                .isAnyLinked()) {
-                if (!RtsStorageManager.tryConsumeBlock(player, msg.itemId, meta, 1)) {
-                    RtsbuildingMod.LOGGER.debug(
-                        "C2SRtsPlaceMessage: insufficient {} in storage for {}, placement denied",
-                        msg.itemId,
-                        player.getDisplayName());
-                    return null;
-                }
-            } else {
-                // 未链接存储：使用会话模拟数据进行消耗（无物理存储时仅更新缓存）
-                RtsStorageSession session = RtsStorageManager.getSession(player);
-                session.tryConsume(msg.itemId, meta, 1);
-                session.populateDebugData(); // 确保有模拟数据
+            // Step 1: 消耗物品（先消耗，成功才放置）
+            boolean hasLinkedStorage = RtsStorageManager.getSession(player)
+                .isAnyLinked();
+            boolean consumed = false;
+            net.minecraft.item.ItemStack consumedStack = null; // 用于放置失败时回滚
+            boolean consumedFromInventory = false; // 标记是否从背包扣取（用于回滚）
+
+            if (hasLinkedStorage) {
+                // 链接存储：优先从存储消耗
+                consumed = RtsStorageManager.tryConsumeBlock(player, msg.itemId, meta, 1);
             }
 
-            // 执行放置
+            // 存储扣取失败 → 尝试从玩家背包扣取（非创造模式）
+            if (!consumed && !player.capabilities.isCreativeMode) {
+                net.minecraft.item.Item blockItem = net.minecraft.item.Item.getItemFromBlock(block);
+                if (blockItem != null) {
+                    for (int i = 0; i < player.inventory.mainInventory.length; i++) {
+                        net.minecraft.item.ItemStack invStack = player.inventory.mainInventory[i];
+                        if (invStack != null && invStack.getItem() == blockItem && invStack.getItemDamage() == meta) {
+                            consumedStack = invStack.copy();
+                            invStack.stackSize--;
+                            if (invStack.stackSize <= 0) {
+                                player.inventory.mainInventory[i] = null;
+                            }
+                            consumed = true;
+                            consumedFromInventory = true;
+                            break;
+                        }
+                    }
+                    if (consumed) {
+                        player.inventoryContainer.detectAndSendChanges();
+                    }
+                }
+            } else if (!hasLinkedStorage && player.capabilities.isCreativeMode) {
+                consumed = true; // 创造模式不需要消耗
+            }
+
+            if (!consumed) {
+                RtsbuildingMod.LOGGER
+                    .debug("C2SRtsPlaceMessage: insufficient {} in storage or inventory, placement denied", msg.itemId);
+                return null;
+            }
+
+            // Step 2: 计算 metadata
+            int actualMeta = block.onBlockPlaced(
+                world,
+                msg.clickedX,
+                msg.clickedY,
+                msg.clickedZ,
+                msg.face,
+                (float) msg.hitX,
+                (float) msg.hitY,
+                (float) msg.hitZ,
+                meta);
+
+            // Step 3: 执行放置
             boolean placed;
-            if (msg.forcePlace) {
-                placed = world.setBlock(msg.clickedX, msg.clickedY, msg.clickedZ, block, meta, 3);
+            if (msg.forcePlace || msg.isQuickBuild()) {
+                placed = world.setBlock(msg.clickedX, msg.clickedY, msg.clickedZ, block, actualMeta, 3);
             } else {
-                // 普通放置：先检查是否可替换
                 Block existing = world.getBlock(msg.clickedX, msg.clickedY, msg.clickedZ);
                 if (existing == null || existing.isAir(world, msg.clickedX, msg.clickedY, msg.clickedZ)
                     || existing.getMaterial()
                         .isReplaceable()) {
-                    placed = world.setBlock(msg.clickedX, msg.clickedY, msg.clickedZ, block, meta, 3);
+                    placed = world.setBlock(msg.clickedX, msg.clickedY, msg.clickedZ, block, actualMeta, 3);
                 } else {
-                    // 计算相邻面偏移
                     int offsetX = msg.clickedX;
                     int offsetY = msg.clickedY;
                     int offsetZ = msg.clickedZ;
                     switch (msg.face) {
                         case 0:
                             offsetY--;
-                            break; // DOWN
+                            break;
                         case 1:
                             offsetY++;
-                            break; // UP
+                            break;
                         case 2:
                             offsetZ--;
-                            break; // NORTH
+                            break;
                         case 3:
                             offsetZ++;
-                            break; // SOUTH
+                            break;
                         case 4:
                             offsetX--;
-                            break; // WEST
+                            break;
                         case 5:
                             offsetX++;
-                            break; // EAST
+                            break;
                     }
-                    placed = world.setBlock(offsetX, offsetY, offsetZ, block, meta, 3);
+                    placed = world.setBlock(offsetX, offsetY, offsetZ, block, actualMeta, 3);
                 }
             }
 
-            if (placed) {
-                // Bug2修复：非创造模式下从玩家背包消耗物品
+            // Step 4: 放置失败则回滚消耗
+            if (!placed) {
                 if (!player.capabilities.isCreativeMode) {
-                    net.minecraft.item.Item blockItem = net.minecraft.item.Item.getItemFromBlock(block);
-                    if (blockItem != null) {
-                        player.inventory.consumeInventoryItem(blockItem);
+                    if (consumedFromInventory) {
+                        player.inventory.addItemStackToInventory(consumedStack);
+                        player.inventoryContainer.detectAndSendChanges();
+                    } else if (hasLinkedStorage) {
+                        RtsStorageManager.getSession(player)
+                            .addItem(msg.itemId, meta, 1);
                     }
                 }
-
-                // 播放放置音效
-                world.playSoundEffect(
-                    msg.clickedX + 0.5,
-                    msg.clickedY + 0.5,
-                    msg.clickedZ + 0.5,
-                    block.stepSound.func_150496_b(), // place sound
-                    (block.stepSound.getVolume() + 1.0F) / 2.0F,
-                    block.stepSound.getPitch() * 0.8F);
-
-                // 放置粒子效果
-                world.playAuxSFX(2005, msg.clickedX, msg.clickedY, msg.clickedZ, 0);
                 RtsbuildingMod.LOGGER.debug(
-                    "C2SRtsPlaceMessage: placed {} at ({}, {}, {}) by {}",
-                    block.getUnlocalizedName(),
+                    "C2SRtsPlaceMessage: placement failed for {} at ({}, {}, {}), rolled back consumption",
+                    msg.itemId,
                     msg.clickedX,
                     msg.clickedY,
-                    msg.clickedZ,
-                    player.getDisplayName());
+                    msg.clickedZ);
+                return null;
             }
+
+            // 放置成功
+            world.playSoundEffect(
+                msg.clickedX + 0.5,
+                msg.clickedY + 0.5,
+                msg.clickedZ + 0.5,
+                block.stepSound.func_150496_b(),
+                (block.stepSound.getVolume() + 1.0F) / 2.0F,
+                block.stepSound.getPitch() * 0.8F);
+            world.playAuxSFX(2005, msg.clickedX, msg.clickedY, msg.clickedZ, 0);
+            RtsbuildingMod.LOGGER.debug(
+                "C2SRtsPlaceMessage: placed {} at ({}, {}, {}) by {}",
+                block.getUnlocalizedName(),
+                msg.clickedX,
+                msg.clickedY,
+                msg.clickedZ,
+                player.getDisplayName());
 
             return null;
         }

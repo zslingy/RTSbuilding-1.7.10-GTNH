@@ -186,6 +186,7 @@ screen.rtsbuilding.quick_build.mode_destroy=Range Destroy
 screen.rtsbuilding.quick_build.shape=Shape
 screen.rtsbuilding.quick_build.fill=Fill
 screen.rtsbuilding.quick_build.rotation=Rotation
+screen.rtsbuilding.quick_build.cylinder=Cylinder
 screen.rtsbuilding.quick_build.materials=Materials: %s blocks
 screen.rtsbuilding.quick_build.destroy_hint=RMB sets A/B, wheel height, RMB confirms.
 screen.rtsbuilding.ultimine.title=Ultimine

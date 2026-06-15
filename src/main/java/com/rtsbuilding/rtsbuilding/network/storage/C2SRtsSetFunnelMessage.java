@@ -17,6 +17,7 @@ public class C2SRtsSetFunnelMessage implements IMessage {
     /** Bug5修复：漏斗目标世界坐标（鼠标指向位置） */
     private double targetX, targetY, targetZ;
     private boolean hasPosition;
+    private int rangeSize = 5;
 
     public C2SRtsSetFunnelMessage() {}
 
@@ -25,12 +26,17 @@ public class C2SRtsSetFunnelMessage implements IMessage {
     }
 
     public C2SRtsSetFunnelMessage(int i, int s, double tx, double ty, double tz, boolean hasPos) {
+        this(i, s, tx, ty, tz, hasPos, 5);
+    }
+
+    public C2SRtsSetFunnelMessage(int i, int s, double tx, double ty, double tz, boolean hasPos, int rangeSize) {
         inventorySlot = i;
         storageSlot = s;
         targetX = tx;
         targetY = ty;
         targetZ = tz;
         hasPosition = hasPos;
+        this.rangeSize = clampRange(rangeSize);
     }
 
     @Override
@@ -43,6 +49,7 @@ public class C2SRtsSetFunnelMessage implements IMessage {
             buf.writeDouble(targetY);
             buf.writeDouble(targetZ);
         }
+        buf.writeInt(rangeSize);
     }
 
     @Override
@@ -54,6 +61,11 @@ public class C2SRtsSetFunnelMessage implements IMessage {
             targetX = buf.readDouble();
             targetY = buf.readDouble();
             targetZ = buf.readDouble();
+        }
+        if (buf.readableBytes() >= 4) {
+            rangeSize = clampRange(buf.readInt());
+        } else {
+            rangeSize = 5;
         }
     }
 
@@ -81,6 +93,14 @@ public class C2SRtsSetFunnelMessage implements IMessage {
         return hasPosition;
     }
 
+    public int getRangeSize() {
+        return rangeSize;
+    }
+
+    private static int clampRange(int rangeSize) {
+        return Math.max(1, Math.min(16, rangeSize));
+    }
+
     /**
      * Bug7修复：服务端接收漏斗开启/关闭请求，更新 RtsStorageSession。
      * inventorySlot: 0=关闭, >=0=开启（指定来源物品栏槽位）
@@ -97,6 +117,7 @@ public class C2SRtsSetFunnelMessage implements IMessage {
             if (m.getInventorySlot() >= 0) {
                 session.setFunnelActive(true);
                 session.setFunnelTargetSlot(m.getInventorySlot());
+                session.setFunnelRangeSize(m.getRangeSize());
                 if (m.hasPosition()) {
                     session.setFunnelTargetPos(m.getTargetX(), m.getTargetY(), m.getTargetZ());
                     RtsbuildingMod.LOGGER.debug(

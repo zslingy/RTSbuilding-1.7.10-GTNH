@@ -14,6 +14,7 @@ import net.minecraft.init.Blocks;
 import net.minecraft.item.ItemStack;
 import net.minecraft.world.World;
 import net.minecraft.world.WorldServer;
+import net.minecraftforge.common.ForgeHooks;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.world.BlockEvent;
 
@@ -69,6 +70,11 @@ public final class RtsMineManager {
      */
     public static void startMining(EntityPlayerMP player, int x, int y, int z, byte face, byte toolSlot,
         String toolItemId, ItemStack toolPrototype, boolean allowPlacedBlockRecovery) {
+        startMining(player, x, y, z, face, toolSlot, toolItemId, toolPrototype, allowPlacedBlockRecovery, false);
+    }
+
+    public static void startMining(EntityPlayerMP player, int x, int y, int z, byte face, byte toolSlot,
+        String toolItemId, ItemStack toolPrototype, boolean allowPlacedBlockRecovery, boolean ultimine) {
         if (player == null || player.worldObj == null) return;
         UUID uuid = player.getUniqueID();
 
@@ -89,7 +95,6 @@ public final class RtsMineManager {
         if (actualTool == null && toolSlot >= 0 && toolSlot < 9) {
             actualTool = player.inventory.mainInventory[toolSlot];
         }
-        // Bug1.1修复：如果仍为null，尝试从玩家当前手持槽位获取
         if (actualTool == null || actualTool.getItem() == null) {
             actualTool = player.getCurrentEquippedItem();
         }
@@ -110,27 +115,35 @@ public final class RtsMineManager {
         mine.startTick = world.getTotalWorldTime();
         mine.progress = 0.0F;
         mine.lastStage = -1;
+        mine.ultimine = ultimine;
 
-        float toolSpeed = getToolSpeed(actualTool, block, world, x, y, z);
-        // Bug7修复：最小硬度阈值从 0.01F → 0.3F，防止生存模式下对极软方块（硬度≈0）的瞬间破坏
-        // Bug1.1修复：speedMultiplier 上限 5.0F，防止极端工具速度导致瞬间破坏
-        mine.speedMultiplier = Math.min(toolSpeed / Math.max(hardness, 0.3F), 5.0F);
+        mine.speedMultiplier = computeSpeedMultiplier(player, actualTool, block, world, x, y, z);
+
+        // P0-4: 连锁模式预收集目标方块（在破坏前收集，避免破坏后中心方块为空气导致 BFS 失败）
+        if (ultimine) {
+            int limit = RtsProgressionManager.getUltimineLimit(player);
+            mine.pendingChainBlocks = RtsUltimineCollector.collect(world, x, y, z, limit, 64);
+            RtsbuildingMod.LOGGER.debug(
+                "RtsMineManager: {} pre-collected {} chain targets from ({},{},{})",
+                player.getDisplayName(),
+                mine.pendingChainBlocks.size(),
+                x,
+                y,
+                z);
+        }
 
         activeMines.put(uuid, mine);
 
-        if (Config.debugMode) {
-            RtsbuildingMod.LOGGER.debug(
-                "RtsMineManager: {} started mining ({}, {}, {}) hardness={} toolSpeed={} multiplier={}",
-                player.getDisplayName(),
-                x,
-                y,
-                z,
-                hardness,
-                toolSpeed,
-                mine.speedMultiplier);
-        }
-
-        // 创造模式 → 下一个 tick 立即破坏
+        RtsbuildingMod.LOGGER.debug(
+            "RtsMineManager: {} started mining ({}, {}, {}) hardness={} multiplier={} ultimine={} activeMines={}",
+            player.getDisplayName(),
+            x,
+            y,
+            z,
+            hardness,
+            mine.speedMultiplier,
+            ultimine,
+            activeMines.size());
     }
 
     /**
@@ -238,14 +251,25 @@ public final class RtsMineManager {
         if (player == null) return;
         UUID uuid = player.getUniqueID();
         ActiveMine removed = activeMines.remove(uuid);
-        if (removed != null && Config.debugMode) {
-            RtsbuildingMod.LOGGER.debug(
-                "RtsMineManager: {} aborted mining ({}, {}, {})",
-                player.getDisplayName(),
+        if (removed != null) {
+            // 修复: 发送stage=-1清除客户端裂纹动画
+            S2CRtsMineProgressMessage clearMsg = new S2CRtsMineProgressMessage(
                 removed.posX,
                 removed.posY,
-                removed.posZ);
+                removed.posZ,
+                (byte) -1);
+            RtsNetworkManager.NETWORK.sendTo(clearMsg, player);
+            if (Config.debugMode) {
+                RtsbuildingMod.LOGGER.debug(
+                    "RtsMineManager: {} aborted mining ({}, {}, {})",
+                    player.getDisplayName(),
+                    removed.posX,
+                    removed.posY,
+                    removed.posZ);
+            }
         }
+        // P0-4: 同时中止连锁挖掘（连锁由 C2SRtsUltimineMessage 独立管理）
+        abortUltimine(player);
     }
 
     /**
@@ -276,6 +300,9 @@ public final class RtsMineManager {
 
         // === 单方块渐进式挖掘处理 ===
         if (!activeMines.isEmpty()) {
+            // [调试日志] Issue 2: 确认onServerTick被调用
+            RtsbuildingMod.LOGGER.debug("RtsMineManager: onServerTick activeMines={}", activeMines.size());
+
             long currentTick = world.getTotalWorldTime();
             Iterator<Map.Entry<UUID, ActiveMine>> it = activeMines.entrySet()
                 .iterator();
@@ -286,6 +313,9 @@ public final class RtsMineManager {
 
                 EntityPlayerMP player = findPlayerByUUID(entry.getKey());
                 if (player == null) {
+                    // [调试日志] Issue 2: 确认玩家查找失败
+                    RtsbuildingMod.LOGGER
+                        .debug("RtsMineManager: player not found for UUID={}, removing mine", entry.getKey());
                     it.remove();
                     continue;
                 }
@@ -293,6 +323,13 @@ public final class RtsMineManager {
                 World playerWorld = player.worldObj;
 
                 if (!RtsBreakPolicy.canBreakBlock(player, playerWorld, mine.posX, mine.posY, mine.posZ)) {
+                    // [调试日志] Issue 2: 确认挖掘被策略阻止
+                    RtsbuildingMod.LOGGER.debug(
+                        "RtsMineManager: {} mining blocked by policy at ({}, {}, {})",
+                        player.getDisplayName(),
+                        mine.posX,
+                        mine.posY,
+                        mine.posZ);
                     it.remove();
                     continue;
                 }
@@ -319,6 +356,14 @@ public final class RtsMineManager {
                         mine.posZ,
                         (byte) newStage);
                     RtsNetworkManager.NETWORK.sendTo(progressMsg, player);
+                    // [调试日志] 确认进度消息已发送
+                    RtsbuildingMod.LOGGER.debug(
+                        "RtsMineManager: {} progress stage={} at ({}, {}, {})",
+                        player.getDisplayName(),
+                        newStage,
+                        mine.posX,
+                        mine.posY,
+                        mine.posZ);
                 }
             }
         }
@@ -471,6 +516,16 @@ public final class RtsMineManager {
             return;
         }
 
+        // [调试日志] 确认breakBlock被调用及mine.ultimine值
+        RtsbuildingMod.LOGGER.debug(
+            "RtsMineManager.breakBlock: player={} pos=({},{},{}) ultimine={} progress={}",
+            player.getDisplayName(),
+            mine.posX,
+            mine.posY,
+            mine.posZ,
+            mine.ultimine,
+            mine.progress);
+
         int metadata = world.getBlockMetadata(mine.posX, mine.posY, mine.posZ);
 
         // 触发 Forge BreakEvent（允许其他 mod 取消破坏）
@@ -560,37 +615,137 @@ public final class RtsMineManager {
                     mine.posZ,
                     mine.progress);
             }
+
+            // 连锁破坏：第一块方块破坏后，触发链式破坏相邻同类方块
+            if (mine.ultimine) {
+                triggerChainMining(player, world, mine);
+            }
         }
     }
 
     /**
-     * 计算工具对指定方块的挖掘速度。
-     * 对齐原版 ForgeHooks.blockStrength / PlayerInteractionManager 的速度计算。
+     * 连锁破坏：从被破坏方块出发BFS收集同类方块并直接破坏。
+     * 连锁方块不需要破坏进度，基于连锁速度直接破坏。
+     * 掉落物绑定自动入库设定。
+     * P0-4: 优先使用预收集的 pendingChainBlocks（破坏前 BFS 收集），避免破坏后中心方块为空气。
      */
-    private static float getToolSpeed(ItemStack tool, Block block, World world, int x, int y, int z) {
-        if (tool == null || tool.getItem() == null) {
-            return 1.0F;
+    private static void triggerChainMining(EntityPlayerMP player, World world, ActiveMine mine) {
+        List<int[]> chainTargets;
+        if (mine.pendingChainBlocks != null && !mine.pendingChainBlocks.isEmpty()) {
+            // 使用预收集的目标（在 startMining 时收集，此时中心方块尚未被破坏）
+            chainTargets = mine.pendingChainBlocks;
+        } else {
+            // 回退：实时 BFS 收集（仅在预收集不可用时使用）
+            int limit = RtsProgressionManager.getUltimineLimit(player);
+            chainTargets = RtsUltimineCollector.collect(world, mine.posX, mine.posY, mine.posZ, limit, 64);
         }
 
-        float speed = tool.getItem()
-            .getDigSpeed(tool, block, world.getBlockMetadata(x, y, z));
-        if (speed <= 1.0F) {
-            speed = 1.0F;
+        boolean autoStore = false;
+        RtsStorageSession session = null;
+        if (player.getUniqueID() != null) {
+            session = RtsStorageManager.getSession(player);
+            if (session != null && session.isAutoStoreMinedDrops()
+                && RtsProgressionManager.canUse(player, RtsFeature.AUTO_STORE_MINED_DROPS)) {
+                autoStore = true;
+            }
         }
 
-        boolean canHarvest = false;
+        int broken = 0;
+        for (int[] target : chainTargets) {
+            int tx = target[0], ty = target[1], tz = target[2];
+            // 跳过已破坏的种子方块
+            if (tx == mine.posX && ty == mine.posY && tz == mine.posZ) continue;
+
+            if (!world.blockExists(tx, ty, tz) || world.isAirBlock(tx, ty, tz)) continue;
+            Block chainBlock = world.getBlock(tx, ty, tz);
+            if (chainBlock == null) continue;
+            float hardness = chainBlock.getBlockHardness(world, tx, ty, tz);
+            if (hardness < 0) continue;
+
+            int metadata = world.getBlockMetadata(tx, ty, tz);
+
+            // 临时装备工具
+            ItemStack prevHeld = player.getCurrentEquippedItem();
+            if (mine.toolPrototype != null && mine.toolPrototype.getItem() != null) {
+                player.inventory.mainInventory[player.inventory.currentItem] = mine.toolPrototype.copy();
+            }
+
+            try {
+                boolean chainRemoved = player.theItemInWorldManager.tryHarvestBlock(tx, ty, tz);
+                if (chainRemoved) {
+                    broken++;
+                    RtsStorageManager.onLinkedStorageBlockBroken(world, tx, ty, tz);
+                    // 自动入库
+                    if (autoStore && session != null) {
+                        RtsStorageManager.absorbNearbyMinedDrops(player, tx, ty, tz, session);
+                    }
+                    world.playAuxSFX(2001, tx, ty, tz, Block.getIdFromBlock(chainBlock) + (metadata << 12));
+                }
+            } catch (Exception e) {
+                boolean chainRemoved = world.setBlockToAir(tx, ty, tz);
+                if (chainRemoved) {
+                    broken++;
+                    if (!player.capabilities.isCreativeMode) {
+                        chainBlock.dropBlockAsItem(world, tx, ty, tz, metadata, 0);
+                    }
+                    world.playAuxSFX(2001, tx, ty, tz, Block.getIdFromBlock(chainBlock) + (metadata << 12));
+                }
+            }
+
+            // 恢复工具
+            if (prevHeld != null) {
+                player.inventory.mainInventory[player.inventory.currentItem] = prevHeld;
+            }
+        }
+
+        player.inventoryContainer.detectAndSendChanges();
+
+        RtsbuildingMod.LOGGER.debug(
+            "RtsMineManager: {} chain mined {} blocks from ({},{},{})",
+            player.getDisplayName(),
+            broken,
+            mine.posX,
+            mine.posY,
+            mine.posZ);
+    }
+
+    /**
+     * 计算工具对指定方块的挖掘速度。
+     * 使用 ForgeHooks.blockStrength() 对齐原版 MC 1.7.10 的速度计算：
+     * - 能采集时：breakSpeed / hardness / 30
+     * - 不能采集时：breakSpeed / hardness / 100
+     * - 自动包含效率附魔、药水效果等
+     *
+     * 远程挖掘特殊处理：强制 onGround=true（避免不在地面的 /5 惩罚）。
+     */
+    private static float computeSpeedMultiplier(EntityPlayerMP player, ItemStack tool, Block block, World world, int x,
+        int y, int z) {
+        float hardness = block.getBlockHardness(world, x, y, z);
+        if (hardness < 0) return 0;
+
+        // 临时装备工具到玩家手上（ForgeHooks.blockStrength 读取玩家手持物品）
+        ItemStack prevHeld = player.getCurrentEquippedItem();
+        if (tool != null && tool.getItem() != null) {
+            player.inventory.mainInventory[player.inventory.currentItem] = tool.copy();
+        }
+
+        // 远程挖掘：强制 onGround=true，避免不在地面的 /5 惩罚
+        boolean prevOnGround = player.onGround;
+        player.onGround = true;
+
+        float breakSpeed;
         try {
-            canHarvest = tool.getItem()
-                .canHarvestBlock(block, tool);
-        } catch (Exception e) {
-            canHarvest = tool.func_150997_a/* getStrVsBlock */(block) > 1.0F;
+            breakSpeed = ForgeHooks.blockStrength(block, player, world, x, y, z);
+        } finally {
+            // 恢复
+            player.onGround = prevOnGround;
+            player.inventory.mainInventory[player.inventory.currentItem] = prevHeld;
         }
 
-        if (!canHarvest) {
-            speed = Math.min(speed, 1.0F);
-        }
-
-        return Math.max(speed, 0.1F);
+        // ForgeHooks.blockStrength 返回每 tick 进度 = toolSpeed / hardness / 30 (或 /100)
+        // 当前公式: increment = BASE_PROGRESS_PER_TICK(1/30) * speedMultiplier
+        // 所以 speedMultiplier = breakSpeed * 30
+        return Math.max(breakSpeed * 30.0F, 0.0F);
     }
 
     /**
@@ -609,6 +764,9 @@ public final class RtsMineManager {
         float progress;
         float speedMultiplier;
         int lastStage;
+        boolean ultimine;
+        /** P0-4: 连锁预收集目标（在破坏前 BFS 收集，避免破坏后中心方块为空气） */
+        List<int[]> pendingChainBlocks;
     }
 
     /**
@@ -638,10 +796,10 @@ public final class RtsMineManager {
         net.minecraft.server.MinecraftServer server = net.minecraft.server.MinecraftServer.getServer();
         if (server == null) return;
 
-        for (WorldServer world : server.worldServers) {
-            if (world != null) {
-                onServerTick(world);
-            }
+        // Bug修复：仅在主世界（overworld）处理挖掘进度，避免多维度重复累加
+        WorldServer overworld = server.worldServers[0];
+        if (overworld != null) {
+            onServerTick(overworld);
         }
     }
 

@@ -1,100 +1,76 @@
 # AGENTS.md — RTSbuilding-1.7.10-port
 
 ## Project Overview
-- **Mod Name**: RTS Building: Build From Above
-- **Mod ID**: `rtsbuilding`
+- **Mod**: RTS Building: Build From Above (`rtsbuilding`), ported from 1.21.1 NeoForge to 1.7.10 Forge GTNH
 - **Root Package**: `com.rtsbuilding.rtsbuilding`
-- **Minecraft Version**: 1.7.10
-- **Forge Version**: 10.13.4.1614
-- **Mod Loader**: FML (Forge Mod Loader) via GTNH Convention plugin
-- **Mappings**: MCP stable_12
-- **Java Syntax**: Jabel (modern Java syntax compiled to J8 bytecode)
-- **Gradle Version**: 9.3.1
-- **License**: LGPL v3
-- **Authors**: JerryLunar, H-crab; ported by 五世桃花亭
-- **Ported From**: RTSbuilding-main (1.21.1 NeoForge → 1.7.10 Forge GTNH)
-- **Source Files**: ~120 Java files
+- **Tech Stack**: Minecraft 1.7.10 / Forge 10.13.4.1614 / FML / MCP stable_12 / Gradle 9.3.1 (RetroFuturaGradle via `com.gtnewhorizons.gtnhconvention` plugin)
+- **Java**: Jabel — modern Java syntax compiles to J8 bytecode; `.java-version` = 25 (required for Jabel) but output targets J8
+- **Generated Class**: `com.rtsbuilding.rtsbuilding.Tags` (not in VCS, generated at build time from `gradle.properties` → `gradleTokenVersion`)
 
-## Build Commands
+## Build & Run Commands
 ```bash
-./gradlew build                    # Build the mod
+./gradlew build                    # Build the mod jar
+./gradlew setupDecompWorkspace     # Local dev workspace setup (run once)
 ./gradlew setupCIWorkspace         # CI workspace setup (JitPack)
-./gradlew setupDecompWorkspace     # Local dev workspace setup
+./gradlew spotlessCheck            # Check formatting (Eclipse + import order)
+./gradlew spotlessApply            # Auto-fix formatting
 ```
+- Spotless enforces: Eclipse formatter (`gtnhShared/spotless.eclipseformat.xml`), import order (`gtnhShared/spotless.importorder`: java → javax → net → org → com), removes unused imports, prettier for JSON
+- `build/libs/rtsbuilding-NO-GIT-TAG-SET.jar` is the output; set a git tag for proper versioning
+
+## Critical Build Quirk: SRG Mapping Patch
+`build.gradle.kts` patches `packaged.srg` at jar time to add a missing FML SRG mapping (`FMLControlledNamespacedRegistry.getObject` → `a`). Without this, runtime throws `NoSuchMethodError`. If you modify the build script or update Forge/FML, verify this patch still applies.
 
 ## Project Structure
 ```
 src/main/java/com/rtsbuilding/rtsbuilding/
 ├── RtsbuildingMod.java            # @Mod entry point, delegates to proxy
-├── CommonProxy.java               # Server proxy: entity, network, events, GUI handler
-├── ClientProxy.java               # Client proxy: 21 keybindings, renderers, input
-├── Config.java                    # Forge Configuration (4 categories, 7 values)
-├── RtsCommunityLinks.java         # Discord/GitHub/QQ links
-├── common/BuilderMode.java        # Builder mode enum
-├── entity/RtsCameraEntity.java    # No-clip camera entity (EntityLivingBase)
-├── mixin/ChestMenuMixin.java      # Remote chest menu distance bypass
+├── CommonProxy.java               # Server: entity reg, network, events, GUI handler
+├── ClientProxy.java               # Client: 20 keybindings, renderers, input
+├── Config.java                    # Forge Configuration (4 categories)
+├── common/                        # BuilderMode enum
+├── entity/                        # RtsCameraEntity (no-clip camera)
+├── mixin/                         # ChestMenuMixin (remote chest distance bypass)
 ├── util/                          # BlockPos, RtsCountUtil, RtsPinyinSearch, RtsPlayerUtil
-├── blueprint/                     # Blueprint system (format readers/writers, transforms, placement)
-├── client/                        # Client UI: screens, panels, renderers, overlays, popups
+├── blueprint/                     # Blueprint system (readers, transforms, placement, network)
+├── client/                        # UI: screens, panels, renderers, overlays, popups, view models
 ├── compat/                        # AE2, NEI, remote menu compatibility
-├── network/                       # 62 network discriminators (IMessage + IMessageHandler)
-├── progression/                   # Skill tree: 19 nodes, 16 features, costs/effects
-└── server/                        # Server core: storage, camera, mining, progression, tracking
+├── network/                       # 63 network messages (IMessage + IMessageHandler)
+├── progression/                   # Skill tree: nodes, features, costs/effects
+└── server/                        # Storage, camera, mining, progression, tracking, data, menu
 ```
 
-## Key Source Files
-| File | Lines | Purpose |
-|------|-------|---------|
-| `RtsbuildingMod.java` | 53 | @Mod entry point |
-| `ClientProxy.java` | 351 | Client init, keybindings, renderers |
-| `CommonProxy.java` | 88 | Server init, entity reg, network |
-| `Config.java` | 212 | Forge Configuration |
-| `RtsNetworkManager.java` | 340 | 62 packet discriminators |
-| `RtsStorageManager.java` | 545 | Storage linking/scanning/transfers |
-| `RtsCameraManager.java` | varies | Camera session management |
-| `RtsScreen.java` | varies | Main RTS GUI screen |
-| `RtsWorldRenderer.java` | varies | World overlay renderer |
-| `ChestMenuMixin.java` | varies | Remote chest menu mixin |
+## Network Architecture
+- `SimpleNetworkWrapper` channel `"rtsbuilding"` with 63 discriminators in `RtsNetworkManager.java`
+- 7 sub-packages: `camera` (3), `builder` (17), `craft` (8), `feedback` (1), `progression` (9), `storage` (23), `blueprint.network` (2)
+- Naming: `C2S*` = client→server, `S2C*` = server→client
+- **When adding a new packet**: register in `RtsNetworkManager.registerMessages()` at the end of the appropriate section, incrementing `disc` — do NOT reuse discriminator numbers
 
-## Coding Conventions
-- **Style**: Eclipse formatter (4-space indent, 120 char line length), enforced by Spotless
-- **Import Order**: java → javax → net → org → com (see `gtnhShared/spotless.importorder`)
-- **Line Endings**: LF (enforced via `.gitattributes`)
+## Key Coding Conventions
+- **Formatting**: Spotless enforced — run `spotlessApply` before committing. Eclipse formatter 4-space indent, 120 char line width
+- **Import Order**: java → javax → net → org → com
+- **Line Endings**: LF (`.gitattributes` enforces)
 - **Encoding**: UTF-8
-- **Annotations**: `@Mod`, `@Instance`, `@SidedProxy`, `@EventHandler` (FML pattern)
-- **Network**: `SimpleNetworkWrapper` with `IMessage` + `IMessageHandler` pattern
-- **GUI**: `GuiScreen` / `GuiContainer` (1.7.10 style)
-- **Rendering**: Tessellator + GL11 (fixed-function pipeline)
-- **Config**: `Configuration` class from Forge
+- **FML Pattern**: `@Mod` + `@SidedProxy` (ClientProxy/CommonProxy), `@EventHandler` lifecycle
+- **Rendering**: Tessellator + GL11 fixed-function pipeline (1.7.10 style)
+- **GUI**: `GuiScreen` / `GuiContainer` / `IGuiHandler` pattern
+- **Config**: `Configuration` class from Forge, synchronized in `CommonProxy.preInit()`
+- **Mixin**: UniMixins, 1 mixin (`ChestMenuMixin`), `JAVA_8` compat level, `required: true`
 
-## Architecture Notes
-- **Client-Server Proxy**: `@SidedProxy` pattern (ClientProxy / CommonProxy)
-- **Network**: 62 discriminators across 7 sub-packages (builder, camera, craft, feedback, progression, storage, blueprint)
-- **Mixin**: UniMixins, 1 mixin (ChestMenuMixin), `JAVA_8` compat level
-- **Dependencies**: GTNHLib 0.7.10, NEI 2.8.48-GTNH, AE2 Unofficial rv3-beta-695-GTNH (all compileOnly)
-
-## Resources
-- `src/main/resources/mcmod.info` — Mod metadata (JSON v2 with ${} tokens)
-- `src/main/resources/mixins.rtsbuilding.json` — Mixin config
-- `src/main/resources/assets/rtsbuilding/lang/` — 4 locales (en_US, zh_CN, zh_HK, zh_TW)
-- `src/main/resources/assets/rtsbuilding/textures/gui/` — UI textures (topbar, quickbuild, general)
+## Dependencies (all compileOnly)
+- `com.github.GTNewHorizons:GTNHLib:0.7.10:dev` — also provides JVM Downgrader stubs at runtime
+- `com.github.GTNewHorizons:NotEnoughItems:2.8.48-GTNH:dev` — optional compat
+- `com.github.GTNewHorizons:Applied-Energistics-2-Unofficial:rv3-beta-695-GTNH:dev` — optional compat
 
 ## Testing
-- No test framework configured. No `src/test/` directory.
+- No test framework or `src/test/` directory exists. Verify changes by building and running `./gradlew runClient`.
 
 ## Documentation
-- `迁移文档/` — 9 porting analysis/migration documents (stages 1-7)
-- `项目结构文档/` — 10 project structure documents (detailed module analysis)
+- `迁移文档/` — 9 porting analysis documents (stages 1-7)
+- `项目结构文档/` — 10 module analysis documents
 - `错误日志.txt` — Build error log
 
-## Dependencies (compileOnly)
-- `com.github.GTNewHorizons:GTNHLib:0.7.10:dev`
-- `com.github.GTNewHorizons:NotEnoughItems:2.8.48-GTNH:dev`
-- `com.github.GTNewHorizons:Applied-Energistics-2-Unofficial:rv3-beta-695-GTNH:dev`
-
-<!-- AGENTS.md -->
-# 项目语言规范
-
-- **日常交流**：使用简体中文。
-- **代码注释**：使用简体中文，涉及编程术语时，请保留英文原文并（在必要时）提供中文解释。
-- **Git Commit**：使用中文，格式遵循 "feat: 新增功能"。
+## Language Convention (Chinese)
+- **日常交流**：使用简体中文
+- **代码注释**：使用简体中文，涉及编程术语时保留英文原文
+- **Git Commit**：使用中文，格式遵循 "feat: 新增功能"

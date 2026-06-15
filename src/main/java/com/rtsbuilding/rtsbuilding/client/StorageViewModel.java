@@ -30,7 +30,7 @@ public class StorageViewModel {
     public int totalPages = 1;
 
     /** 每页条目数 */
-    public int entriesPerPage = 88; // 8×11 网格
+    public int entriesPerPage = 40; // 20×2 网格
 
     // ---- 搜索 ----
     public String searchQuery = "";
@@ -40,9 +40,9 @@ public class StorageViewModel {
     public String sortMode = "name_asc"; // name_asc, name_desc, count_asc, count_desc
 
     // ---- 面板高度（可调） ----
-    public static final int MIN_PANEL_H = 72;
-    public static final int DEFAULT_PANEL_H = 110;
-    public static final int MAX_PANEL_H = 320;
+    public static final int MIN_PANEL_H = 36;
+    public static final int DEFAULT_PANEL_H = 55;
+    public static final int MAX_PANEL_H = 160;
     public int panelHeight = DEFAULT_PANEL_H;
 
     // ---- 分类 ----
@@ -54,7 +54,10 @@ public class StorageViewModel {
     // ---- 连接状态 ----
     public int linkedStorageCount = 0;
 
-    /** 已链接存储方块的世界坐标列表（用于高亮渲染） */
+    /** 已链接存储条目列表（对齐原版 LinkedStorageEntry，支持多容器） */
+    public final List<LinkedStorageEntry> linkedEntries = new ArrayList<>();
+
+    /** 已链接存储方块的世界坐标列表（用于高亮渲染，从 linkedEntries 派生） */
     public final List<BlockPos> linkedStoragePositions = new ArrayList<>();
 
     // ---- 阶段7: ItemStack resolve 缓存 ----
@@ -71,6 +74,8 @@ public class StorageViewModel {
         public long count;
         public String displayName;
         public boolean craftable;
+        /** 直接存储 ItemStack，避免 itemId → ItemStack 往返转换失败 */
+        public net.minecraft.item.ItemStack stack;
 
         public StorageEntry(String itemId, int meta, long count, String displayName, boolean craftable) {
             this.itemId = itemId;
@@ -78,6 +83,37 @@ public class StorageViewModel {
             this.count = count;
             this.displayName = displayName;
             this.craftable = craftable;
+            this.stack = null;
+        }
+
+        public StorageEntry(net.minecraft.item.ItemStack stack, long count, String displayName, boolean craftable) {
+            this.stack = stack != null ? stack.copy() : null;
+            this.itemId = stack != null ? (String) cpw.mods.fml.common.registry.GameData.getItemRegistry()
+                .getNameForObject(stack.getItem()) : "unknown";
+            this.meta = stack != null ? stack.getItemDamage() : 0;
+            this.count = count;
+            this.displayName = displayName;
+            this.craftable = craftable;
+        }
+    }
+
+    /** 已链接存储条目（对齐原版 LinkedStorageEntry） */
+    public static class LinkedStorageEntry {
+
+        public final int dimension;
+        public final int x;
+        public final int y;
+        public final int z;
+        public final byte mode; // 0=NORMAL, 1=EXTRACT_ONLY
+        public final int priority;
+
+        public LinkedStorageEntry(int dimension, int x, int y, int z, byte mode, int priority) {
+            this.dimension = dimension;
+            this.x = x;
+            this.y = y;
+            this.z = z;
+            this.mode = mode;
+            this.priority = priority;
         }
     }
 
@@ -154,6 +190,7 @@ public class StorageViewModel {
         entries.clear();
         filteredEntries.clear();
         resolveCache.clear();
+        linkedEntries.clear();
         linkedStoragePositions.clear();
         currentPage = 0;
         totalPages = 1;
@@ -194,14 +231,18 @@ public class StorageViewModel {
 
     /**
      * 根据 itemId 判断物品是否属于指定分类。
-     * 使用 Item 类层级进行客户端本地分类。
+     * 优先使用 entry.stack 直接获取 Item，避免注册表查找失败。
      */
     private static boolean matchesCategory(StorageEntry entry, String category) {
-        if (entry == null || entry.itemId == null) return false;
+        if (entry == null) return false;
         try {
-            net.minecraft.item.Item item = (net.minecraft.item.Item) cpw.mods.fml.common.registry.GameData
-                .getItemRegistry()
-                .getObject(new net.minecraft.util.ResourceLocation(entry.itemId));
+            net.minecraft.item.Item item = null;
+            if (entry.stack != null && entry.stack.getItem() != null) {
+                item = entry.stack.getItem();
+            } else if (entry.itemId != null) {
+                item = (net.minecraft.item.Item) cpw.mods.fml.common.registry.GameData.getItemRegistry()
+                    .getObject(new net.minecraft.util.ResourceLocation(entry.itemId));
+            }
             if (item == null) return false;
             switch (category) {
                 case "blocks":

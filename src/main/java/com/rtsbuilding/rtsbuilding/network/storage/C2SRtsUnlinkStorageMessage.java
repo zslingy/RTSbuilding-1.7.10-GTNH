@@ -59,15 +59,19 @@ public class C2SRtsUnlinkStorageMessage implements IMessage {
             EntityPlayerMP player = ctx.getServerHandler().playerEntity;
             if (player == null) return null;
 
-            RtsStorageManager.unlinkStorage(player);
+            // 解除指定坐标的链接（支持容器和 AE2）
+            RtsStorageManager.unlinkStorageAt(player, m.getPosX(), m.getPosY(), m.getPosZ());
 
-            // 发送确认（客户端需要清除存储显示并回退到模拟数据）
+            // 发送状态确认
             S2CRtsLinkStorageStatusMessage response = new S2CRtsLinkStorageStatusMessage(
                 m.getPosX(),
                 m.getPosY(),
                 m.getPosZ(),
                 false);
             RtsNetworkManager.NETWORK.sendTo(response, player);
+
+            // 发送更新后的存储页面（携带最新 linkedEntries）
+            RtsStorageManager.sendStoragePage(player, 0, 0);
 
             return null;
         }

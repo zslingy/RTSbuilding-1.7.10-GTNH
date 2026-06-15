@@ -30,9 +30,20 @@ import cpw.mods.fml.common.registry.GameData;
 public class StorageGridView implements IRtsPanel {
 
     private static final String PANEL_NAME = "storage_grid";
-    private static final int COLS = 8;
-    private static final int SLOT_SIZE = 18;
+    private static final int COLS = 20;
+    private static final int ROWS_COUNT = 2;
+    private static final int SLOT_SIZE = 14; // Issue 5: 与快捷栏格子大小一致
     private static final int SLOT_SPACING = 0;
+
+    /** 1.7.10 遗留物品名称映射（客户端也需要，用于 resolveStack） */
+    private static final java.util.Map<String, String[]> LEGACY_NAMES = new java.util.HashMap<>();
+    static {
+        LEGACY_NAMES.put("lapis_lazuli", new String[] { "dye", "4" });
+        LEGACY_NAMES.put("oak_log", new String[] { "log", "0" });
+        LEGACY_NAMES.put("oak_planks", new String[] { "planks", "0" });
+        LEGACY_NAMES.put("stone_bricks", new String[] { "stonebrick", "0" });
+        LEGACY_NAMES.put("bricks", new String[] { "brick_block", "0" });
+    }
 
     private int gridX, gridY, gridW, gridH;
     private int hoveredSlot = -1;
@@ -99,6 +110,18 @@ public class StorageGridView implements IRtsPanel {
         int maxItems = Math.min(COLS * ROWS(), displayEntries.size() - pageStart);
         ItemStack hoveredStack = null;
 
+        // [调试日志] 问题11: 确认存储网格渲染状态
+        com.rtsbuilding.rtsbuilding.RtsbuildingMod.LOGGER.debug(
+            "StorageGridView: render entries={}, displayEntries={}, pageStart={}, maxItems={}, gridX={}, gridY={}, gridW={}, gridH={}",
+            svm.entries.size(),
+            displayEntries.size(),
+            pageStart,
+            maxItems,
+            gridX,
+            gridY,
+            gridW,
+            gridH);
+
         int rows = ROWS();
         for (int row = 0; row < rows; row++) {
             for (int col = 0; col < COLS; col++) {
@@ -115,7 +138,8 @@ public class StorageGridView implements IRtsPanel {
                 if (entryIndex < displayEntries.size()) {
                     StorageEntry entry = displayEntries.get(entryIndex);
                     if (entry != null) {
-                        ItemStack stack = resolveStack(entry);
+                        // 直接使用 entry.stack 渲染，像快捷栏一样无需注册表查找
+                        ItemStack stack = entry.stack;
                         if (slotIndex == hoveredSlot) hoveredStack = stack;
                         renderEntry(screen, stack, sx, sy);
                     }
@@ -132,7 +156,7 @@ public class StorageGridView implements IRtsPanel {
     }
 
     private int ROWS() {
-        return Math.max(1, gridH / (SLOT_SIZE + SLOT_SPACING));
+        return ROWS_COUNT;
     }
 
     private void renderEntry(GuiScreen screen, ItemStack stack, int sx, int sy) {
@@ -143,9 +167,14 @@ public class StorageGridView implements IRtsPanel {
         GL11.glPushMatrix();
         GL11.glEnable(GL11.GL_BLEND);
         GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+        // Issue 5: 物品图标缩小到0.75倍
+        float iconScale = 0.75f;
+        float offset = (SLOT_SIZE - SLOT_SIZE * iconScale) / 2.0f;
+        GL11.glTranslatef(sx + offset, sy + offset, 0);
+        GL11.glScalef(iconScale, iconScale, 1.0f);
         RenderHelper.enableGUIStandardItemLighting();
-        renderItem.renderItemAndEffectIntoGUI(fr, mc.renderEngine, stack, sx + 1, sy + 1);
-        renderItem.renderItemOverlayIntoGUI(fr, mc.renderEngine, stack, sx + 1, sy + 1);
+        renderItem.renderItemAndEffectIntoGUI(fr, mc.renderEngine, stack, 1, 1);
+        renderItem.renderItemOverlayIntoGUI(fr, mc.renderEngine, stack, 1, 1);
         RenderHelper.disableStandardItemLighting();
         GL11.glDisable(GL11.GL_BLEND);
         GL11.glPopMatrix();
@@ -154,14 +183,64 @@ public class StorageGridView implements IRtsPanel {
     private ItemStack resolveStack(StorageEntry entry) {
         if (entry == null || entry.itemId == null) return null;
         try {
+            // 尝试1: 直接用 ResourceLocation 从物品注册表查找
             ResourceLocation rl = new ResourceLocation(entry.itemId);
             net.minecraft.item.Item item = (net.minecraft.item.Item) GameData.getItemRegistry()
                 .getObject(rl);
-            if (item == null) return null;
-            return new ItemStack(item, 1, entry.meta);
+            if (item != null) return new ItemStack(item, 1, entry.meta);
+
+            // 尝试2: 从方块注册表查找
+            net.minecraft.block.Block block = (net.minecraft.block.Block) GameData.getBlockRegistry()
+                .getObject(rl);
+            if (block != null) {
+                net.minecraft.item.Item blockItem = net.minecraft.item.Item.getItemFromBlock(block);
+                if (blockItem != null) return new ItemStack(blockItem, 1, entry.meta);
+            }
+
+            // 尝试3: 去掉 "minecraft:" 前缀后查找
+            String lookupId = entry.itemId;
+            if (lookupId.startsWith("minecraft:")) {
+                lookupId = lookupId.substring("minecraft:".length());
+            }
+            ResourceLocation rl2 = new ResourceLocation(lookupId);
+            item = (net.minecraft.item.Item) GameData.getItemRegistry()
+                .getObject(rl2);
+            if (item != null) return new ItemStack(item, 1, entry.meta);
+
+            block = (net.minecraft.block.Block) GameData.getBlockRegistry()
+                .getObject(rl2);
+            if (block != null) {
+                net.minecraft.item.Item blockItem = net.minecraft.item.Item.getItemFromBlock(block);
+                if (blockItem != null) return new ItemStack(blockItem, 1, entry.meta);
+            }
+
+            // 尝试4: 遗留名称映射
+            String[] legacy = LEGACY_NAMES.get(lookupId);
+            if (legacy != null) {
+                String legacyId = legacy[0];
+                int legacyMeta = legacy.length > 1 ? Integer.parseInt(legacy[1]) : entry.meta;
+                ResourceLocation rl3 = new ResourceLocation(legacyId);
+                item = (net.minecraft.item.Item) GameData.getItemRegistry()
+                    .getObject(rl3);
+                if (item != null) return new ItemStack(item, 1, legacyMeta);
+                block = (net.minecraft.block.Block) GameData.getBlockRegistry()
+                    .getObject(rl3);
+                if (block != null) {
+                    net.minecraft.item.Item blockItem = net.minecraft.item.Item.getItemFromBlock(block);
+                    if (blockItem != null) return new ItemStack(blockItem, 1, legacyMeta);
+                }
+            }
+
+            com.rtsbuilding.rtsbuilding.RtsbuildingMod.LOGGER
+                .debug("StorageGridView.resolveStack: FAILED itemId={} meta={}", entry.itemId, entry.meta);
         } catch (Exception e) {
-            return null;
+            com.rtsbuilding.rtsbuilding.RtsbuildingMod.LOGGER.debug(
+                "StorageGridView.resolveStack: EXCEPTION itemId={} meta={} error={}",
+                entry.itemId,
+                entry.meta,
+                e.getMessage());
         }
+        return null;
     }
 
     @Override

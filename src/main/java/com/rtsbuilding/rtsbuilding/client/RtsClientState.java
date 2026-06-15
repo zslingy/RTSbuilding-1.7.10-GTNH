@@ -91,6 +91,8 @@ public class RtsClientState {
         inter.setInteger("quickBuildSizeY", interaction.quickBuildSizeY);
         inter.setInteger("quickBuildSizeZ", interaction.quickBuildSizeZ);
         inter.setInteger("quickBuildRotation", interaction.quickBuildRotation);
+        inter.setBoolean("quickBuildCylinder", interaction.quickBuildCylinder);
+        inter.setBoolean("lineSnap8Direction", interaction.lineSnap8Direction);
         inter.setBoolean("autoStoreMinedDrops", interaction.autoStoreMinedDrops);
         inter.setBoolean("startCameraAtPlayerHead", interaction.startCameraAtPlayerHead);
         inter.setBoolean("allowPlacedBlockRecovery", interaction.allowPlacedBlockRecovery);
@@ -147,6 +149,8 @@ public class RtsClientState {
             interaction.quickBuildSizeY = inter.getInteger("quickBuildSizeY");
             interaction.quickBuildSizeZ = inter.getInteger("quickBuildSizeZ");
             interaction.quickBuildRotation = inter.getInteger("quickBuildRotation");
+            interaction.quickBuildCylinder = safeBoolean(inter, "quickBuildCylinder", false);
+            interaction.lineSnap8Direction = safeBoolean(inter, "lineSnap8Direction", false);
             interaction.autoStoreMinedDrops = safeBoolean(inter, "autoStoreMinedDrops", true);
             interaction.startCameraAtPlayerHead = safeBoolean(inter, "startCameraAtPlayerHead", false);
             interaction.allowPlacedBlockRecovery = safeBoolean(inter, "allowPlacedBlockRecovery", false);

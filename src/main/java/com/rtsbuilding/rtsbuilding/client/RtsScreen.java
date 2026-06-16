@@ -70,11 +70,12 @@ public class RtsScreen extends GuiScreen {
     /** 是否已发起初始数据请求 */
     private boolean initialDataRequested = false;
 
-    // ---- Bug3修复：拖拽距离追踪（区分点击/拖拽） ----
-    /** 右键拖拽状态已迁移到 CameraInputHelper；仅保留中键追踪 */
+    /** 中键拖拽距离累积，用于区分单击和拖拽 */
     private double middleDragDistance = 0.0D;
     /** 中键按下状态 */
     private boolean middleMouseDown = false;
+    /** 中键拖拽平移的像素阈值，与右键旋转阈值一致 */
+    private static final double MIDDLE_DRAG_THRESHOLD = 1.5D;
 
     // ---- Bug2修复：左键挖掘追踪 ----
     /** 左键按下状态（用于渐进式挖掘 abort） */
@@ -166,46 +167,29 @@ public class RtsScreen extends GuiScreen {
 
     @Override
     public void updateScreen() {
-        // Bug9修复：设置面板打开时不关闭相机（保护子面板）
+        if (mc.currentScreen != this) return;
         if (state.settingsScreenOpen) {
             super.updateScreen();
             return;
         }
-
-        // Bug6修复：远程菜单 grace 倒计时
-        if (state.camera.remoteMenuGraceTicks > 0) {
-            state.camera.remoteMenuGraceTicks--;
-        }
-
-        // Bug6修复：远程菜单打开时不要关闭相机（对标原版 hasRemoteMenuOpen 逻辑）
-        // 当前屏幕是 RtsScreen → 正常处理
-        // 当前屏幕不是 RtsScreen 且不是 null → 远程菜单打开（如箱子GUI），保持相机活跃
-        boolean isRemoteMenuOpen = mc.currentScreen != null && !(mc.currentScreen instanceof RtsScreen)
-            && !state.settingsScreenOpen;
-        if (isRemoteMenuOpen) {
-            // 远程菜单打开状态下，仅更新相机 tick + 心跳，不做GUI渲染
-            if (state.camera.isActive) {
-                Mouse.setGrabbed(false);
-                mc.inGameHasFocus = false;
-                cameraInputHelper.updateInputFromKeyBindings();
-                cameraInputHelper.applyFullLocalPrediction();
-                cameraInputHelper.sendMoveMessageOnInput();
-                if (state.camera.tickHeartbeat()) {
-                    cameraInputHelper.sendHeartbeat();
-                }
-                state.camera.fastMode = Keyboard.isKeyDown(Keyboard.KEY_LCONTROL)
-                    || Keyboard.isKeyDown(Keyboard.KEY_RCONTROL);
-            }
-            return;
-        }
-
-        // 场景2：相机不活跃但GUI打开 → 关闭GUI（异常状态恢复）
-        if (!state.camera.isActive && mc.currentScreen instanceof RtsScreen) {
-            mc.displayGuiScreen(null);
-            return;
-        }
-
+        if (!state.camera.isActive) return;
         super.updateScreen();
+
+        // Bug5修复：计算帧时间差（平滑镜头模式下用于帧率无关的移动插值）
+        float cameraTickDelta = 1.0f;
+        if (state.interaction.smoothCamera) {
+            long now = System.nanoTime();
+            if (state.camera.lastFrameNanos == 0L) {
+                state.camera.lastFrameNanos = now;
+            }
+            long elapsed = now - state.camera.lastFrameNanos;
+            state.camera.lastFrameNanos = now;
+            if (elapsed > 0L) {
+                cameraTickDelta = Math.max(0.0f, Math.min((float) elapsed / 50_000_000L, 2.0f));
+            }
+        } else {
+            state.camera.lastFrameNanos = 0L;
+        }
 
         // ---- 阶段A：相机 tick 逻辑 ----
         if (state.camera.isActive) {
@@ -220,8 +204,8 @@ public class RtsScreen extends GuiScreen {
             // 收集输入并应用 EMA 平滑
             cameraInputHelper.updateInputFromKeyBindings();
 
-            // Bug2b修复：先本地预测，再发送网络消息
-            cameraInputHelper.applyFullLocalPrediction();
+            // Bug2b修复：先本地预测，再发送网络消息（平滑模式使用帧时间缩放）
+            cameraInputHelper.applyFullLocalPrediction(cameraTickDelta);
 
             // 发送移动消息（含输入时重置心跳）
             boolean hadInput = cameraInputHelper.sendMoveMessageOnInput();
@@ -296,7 +280,7 @@ public class RtsScreen extends GuiScreen {
 
     @Override
     public void drawScreen(int mouseX, int mouseY, float partialTicks) {
-        // Bug6修复: 顶栏高度从 52 改为 54（3行布局: 22+16+16）
+        if (mc.currentScreen != this) return;
         drawRect(0, 0, this.width, 54, 0xC0101116);
 
         // 重置帧级状态
@@ -433,17 +417,21 @@ public class RtsScreen extends GuiScreen {
                     }
                 }
             }
-            // Bug3修复：中键拖拽 = 平移（追踪拖拽距离）
+            // 中键拖拽平移：按下瞬间先清除鼠标缓冲区残留，防止单击时产生意外位移
             if (Mouse.isButtonDown(2)) {
                 if (!middleMouseDown) {
                     middleMouseDown = true;
                     middleDragDistance = 0.0D;
+                    Mouse.getDX();
+                    Mouse.getDY();
                 }
                 int dx = Mouse.getDX();
                 int dy = Mouse.getDY();
                 if (dx != 0 || dy != 0) {
                     middleDragDistance += Math.abs(dx) + Math.abs(dy);
-                    cameraInputHelper.addDragPan(dx, -dy);
+                    if (middleDragDistance > MIDDLE_DRAG_THRESHOLD) {
+                        cameraInputHelper.addDragPan(dx, -dy);
+                    }
                 }
             } else {
                 middleMouseDown = false;

@@ -526,13 +526,13 @@ public class RtsStorageSession {
     }
 
     /**
-     * 扫描玩家非快捷栏背包(9-35格)。
+     * 扫描玩家背包(0-35格，含快捷栏)。
      * 将背包物品添加到存储会话。
      */
     public void scanPlayerInventory(net.minecraft.entity.player.EntityPlayer player) {
         if (player == null) return;
-        // 只扫描非快捷栏(9-35)，共27格
-        for (int i = 9; i < 36; i++) {
+        // 扫描全部主背包(0-35)，含快捷栏
+        for (int i = 0; i < 36; i++) {
             ItemStack stack = player.inventory.getStackInSlot(i);
             if (stack != null && stack.getItem() != null) {
                 String itemId = (String) GameData.getItemRegistry()
@@ -545,13 +545,17 @@ public class RtsStorageSession {
     }
 
     /**
-     * 扫描所有已绑定的普通容器。
-     * 遍历 linkedStorages 列表中的每个引用，将容器内容添加到存储会话。
+     * 扫描所有已绑定的普通容器（仅当前维度，扫描前确保区块已加载）。
      */
     public void scanLinkedContainers(net.minecraft.world.World world) {
         if (world == null) return;
+        int currentDim = world.provider.dimensionId;
         for (LinkedStorageRef ref : linkedStorages) {
             if (ref.x < 0 || ref.y < 0 || ref.z < 0) continue;
+            if (ref.dimension != currentDim) continue;
+            if (!world.blockExists(ref.x, ref.y, ref.z)) {
+                world.getChunkFromChunkCoords(ref.x >> 4, ref.z >> 4);
+            }
             TileEntity te = world.getTileEntity(ref.x, ref.y, ref.z);
             if (te instanceof IInventory) {
                 scanContainerInventory((IInventory) te);

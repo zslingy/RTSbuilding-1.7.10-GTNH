@@ -91,6 +91,12 @@ public class CameraViewModel {
     /** Bug6修复：远程菜单 grace 倒计时（ticks），用于远程菜单打开/关闭过渡期 */
     public int remoteMenuGraceTicks = 0;
 
+    /**
+     * Bug1修复: 远程菜单打开前的等待 grace（对齐原版 pendingRemoteMenuOpenTicks = 80）
+     * 在发送可能打开远程容器的交互消息后设置，防止 RTS 屏幕被过早恢复导致闪烁
+     */
+    public int pendingRemoteMenuOpenTicks = 0;
+
     // ---- Bug2修复：相机实体引用（供本地预测用） ----
     /** 服务端创建的相机实体引用，本地预测时直接更新其位置 */
     public RtsCameraEntity cameraEntity = null;
@@ -103,6 +109,14 @@ public class CameraViewModel {
      * 对齐原版 ClientRtsController.localMirrorCamera。
      */
     public RtsCameraEntity localMirror = null;
+
+    // ---- Bug5修复：帧级插值移动（对齐原版 smoothCamera） ----
+    /** 上一帧的纳秒时间戳，用于计算帧时间差 */
+    public long lastFrameNanos = 0L;
+    /** 每 tick 的纳秒数（50ms = 50_000_000ns） */
+    private static final long NANOS_PER_TICK = 50_000_000L;
+    /** 最大 tickDelta（防止跳帧过大） */
+    private static final float MAX_SMOOTH_FRAME_TICKS = 2.00F;
 
     // ---- 边界计算 ----
     public boolean hasBounds() {

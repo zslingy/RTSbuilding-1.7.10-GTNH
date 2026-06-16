@@ -1,0 +1,80 @@
+﻿To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.3.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+
+> Configure project :
+You might want to check out './gradlew :faq' if your build fails.
+Build script update from 2.0.20 to 2.0.26 available! Run ./gradlew updateBuildScript
+
+> Task :compileInjectedInterfacesJava NO-SOURCE
+> Task :extractDependencyATs SKIPPED
+> Task :generateForgeSrgMappings SKIPPED
+> Task :downloadVanillaJars SKIPPED
+> Task :mergeVanillaSidedJars SKIPPED
+> Task :deobfuscateMergedJarToSrg SKIPPED
+> Task :downloadFernflower SKIPPED
+> Task :decompileSrgJar SKIPPED
+> Task :cleanupDecompSrgJar SKIPPED
+> Task :patchDecompiledJar SKIPPED
+> Task :applyJST SKIPPED
+> Task :remapDecompiledJar SKIPPED
+> Task :decompressDecompiledSources UP-TO-DATE
+> Task :processInjectedInterfacesResources NO-SOURCE
+> Task :injectedInterfacesClasses UP-TO-DATE
+> Task :compilePatchedMcJava UP-TO-DATE
+> Task :processPatchedMcResources UP-TO-DATE
+> Task :patchedMcClasses UP-TO-DATE
+> Task :compileApiJava NO-SOURCE
+> Task :processApiResources NO-SOURCE
+> Task :apiClasses UP-TO-DATE
+> Task :injectTags UP-TO-DATE
+> Task :compileInjectedTagsJava UP-TO-DATE
+> Task :extractNatives2 UP-TO-DATE
+> Task :createMcLauncherFiles UP-TO-DATE
+> Task :compileMcLauncherJava UP-TO-DATE
+> Task :processInjectedTagsResources NO-SOURCE
+> Task :injectedTagsClasses UP-TO-DATE
+> Task :processMcLauncherResources NO-SOURCE
+> Task :mcLauncherClasses UP-TO-DATE
+
+> Task :compileJava
+Jabel: initialized
+.\gradlew.bat : 娉? SpongePowered MIXIN Annotation Processor Version=0.8.7
+所在位置 行:1 字符: 1
++ .\gradlew.bat compileJava --no-daemon 2>&1 | Out-File -FilePath "buil ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (娉? SpongePowere...r Version=0.8.7:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+娉? Supported obfuscation types: ObfuscationServiceMCP supports [searge,notch]
+娉? Loading searge mappings from C:\Users\Administrator\.gradle\caches\minecraft\net\minecraftforge\forge\1.7.10-10.13.4
+.1614-1.7.10\unpacked\srgs\mcp-srg.srg
+娉? Writing refmap to F:\McMod\RTSbuilding-1.7.10-port\build\tmp\mixins\mixins.rtsbuilding.refmap.json
+娉? Writing refmap to F:\McMod\RTSbuilding-1.7.10-port\build\tmp\mixins\mixins.rtsbuilding.refmap.json
+娉? Writing searge output SRGs to F:\McMod\RTSbuilding-1.7.10-port\build\tmp\mixins\mixins.srg
+娉? Writing refmap to F:\McMod\RTSbuilding-1.7.10-port\build\tmp\mixins\mixins.rtsbuilding.refmap.json
+娉? Writing refmap to F:\McMod\RTSbuilding-1.7.10-port\build\tmp\mixins\mixins.rtsbuilding.refmap.json
+娉? Writing searge output SRGs to F:\McMod\RTSbuilding-1.7.10-port\build\tmp\mixins\mixins.srg
+F:\McMod\RTSbuilding-1.7.10-port\src\main\java\com\rtsbuilding\rtsbuilding\network\builder\C2SRtsInteractMessage.java:3
+79: 閿欒: 鎵句笉鍒扮鍙?                Block block = world.getBlock(x, y, z);
+                ^
+  绗﹀彿:   绫?Block
+  浣嶇疆: 绫?Handler
+1 涓敊璇?
+
+> Task :compileJava FAILED
+
+
+[Incubating] Problems report is available at: file:///F:/McMod/RTSbuilding-1.7.10-port/build/reports/problems/problems-report.html
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':compileJava'.
+> Compilation failed; see the compiler output below.
+  娉? SpongePowered MIXIN Annotation Processor Version=0.8.7
+  1 涓敊璇?
+
+* Try:
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+
+BUILD FAILED in 16s
+9 actionable tasks: 1 executed, 8 up-to-date

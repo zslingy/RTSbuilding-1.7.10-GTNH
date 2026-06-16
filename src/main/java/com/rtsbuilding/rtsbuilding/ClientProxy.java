@@ -152,6 +152,8 @@ public class ClientProxy extends CommonProxy {
 
         // Bug6修复：远程菜单打开追踪（对齐原版 hasRemoteMenuOpen/pendingRemoteMenuOpenTicks）
         private boolean hasRemoteMenuOpen = false;
+        /** 保存 RtsScreen 实例，远程菜单关闭时恢复而非重建 */
+        private com.rtsbuilding.rtsbuilding.client.RtsScreen savedRtsScreen;
         // Bug7修复：相机输入辅助（远程菜单打开时保持相机活跃）
         private final com.rtsbuilding.rtsbuilding.client.CameraInputHelper remoteCameraInput = new com.rtsbuilding.rtsbuilding.client.CameraInputHelper();
 
@@ -161,29 +163,11 @@ public class ClientProxy extends CommonProxy {
 
             boolean toggleDownNow = keyOpenScreen != null && keyOpenScreen.getIsKeyPressed();
 
-            // Bug3修复：使用 rising-edge（按下即触发），而非 falling-edge（松开触发）
-            // 原版逻辑：按下 G → 立即切换 RTS 模式，不需要等松开
             if (!toggleKeyWasDown && toggleDownNow && toggleCooldown <= 0) {
                 Minecraft mc = Minecraft.getMinecraft();
                 boolean screenOpen = mc.currentScreen instanceof com.rtsbuilding.rtsbuilding.client.RtsScreen;
                 boolean cameraActive = RtsClientState.get().camera.isActive;
 
-                // Bug4修复：验证状态一致性 — 若 cameraActive 为 true 但 renderViewEntity 非相机实体，则状态残留
-                if (cameraActive
-                    && !(mc.renderViewEntity instanceof com.rtsbuilding.rtsbuilding.entity.RtsCameraEntity)) {
-                    RtsClientState.get().camera.isActive = false;
-                    cameraActive = false;
-                }
-                // Bug4修复：若屏幕已打开但 isActive 为 false，强制对齐
-                if (screenOpen && !cameraActive) {
-                    cameraActive = false;
-                }
-
-                // Bug5修复：对齐原版 ClientRtsController 切换顺序 — 先本地设置状态，后发网络消息
-                screenOpen = mc.currentScreen instanceof com.rtsbuilding.rtsbuilding.client.RtsScreen;
-                cameraActive = RtsClientState.get().camera.isActive;
-
-                // 验证状态一致性
                 if (cameraActive
                     && !(mc.renderViewEntity instanceof com.rtsbuilding.rtsbuilding.entity.RtsCameraEntity)) {
                     RtsClientState.get().camera.isActive = false;
@@ -239,10 +223,13 @@ public class ClientProxy extends CommonProxy {
             boolean hasRemoteContainer = mc.thePlayer.openContainer != null && mc.thePlayer.openContainer.windowId != 0;
 
             if (hasRemoteContainer) {
-                // 远程菜单活跃 → 隐藏 RtsScreen（让原版 GUI 接管）
+                // Bug1修复: 远程容器已打开 → 重置 grace timer，隐藏 RtsScreen
+                state.camera.pendingRemoteMenuOpenTicks = 0;
                 hasRemoteMenuOpen = true;
                 state.camera.remoteMenuGraceTicks = 0;
                 if (mc.currentScreen instanceof com.rtsbuilding.rtsbuilding.client.RtsScreen) {
+                    // 保存实例引用（不新建），用于远程菜单关闭后恢复
+                    savedRtsScreen = (com.rtsbuilding.rtsbuilding.client.RtsScreen) mc.currentScreen;
                     mc.displayGuiScreen(null);
                 }
 
@@ -250,17 +237,24 @@ public class ClientProxy extends CommonProxy {
                 org.lwjgl.input.Mouse.setGrabbed(false);
                 mc.inGameHasFocus = false;
                 remoteCameraInput.updateInputFromKeyBindings();
-                remoteCameraInput.applyFullLocalPrediction();
+                remoteCameraInput.applyFullLocalPrediction(1.0f);
                 boolean hadInput = remoteCameraInput.sendMoveMessageOnInput();
                 if (!hadInput && state.camera.tickHeartbeat()) {
                     remoteCameraInput.sendHeartbeat();
                 }
                 state.camera.fastMode = org.lwjgl.input.Keyboard.isKeyDown(org.lwjgl.input.Keyboard.KEY_LCONTROL)
                     || org.lwjgl.input.Keyboard.isKeyDown(org.lwjgl.input.Keyboard.KEY_RCONTROL);
+            } else if (state.camera.pendingRemoteMenuOpenTicks > 0) {
+                // Bug1修复: grace 期间，正在等待服务端打开容器，不恢复 RtsScreen
+                state.camera.pendingRemoteMenuOpenTicks--;
             } else if (hasRemoteMenuOpen) {
-                // 远程容器已关闭 → 短暂 grace 后立即恢复 RtsScreen
+                // 远程容器已关闭 → 恢复保存的 RtsScreen 实例
                 state.camera.remoteMenuGraceTicks++;
-                if (state.camera.remoteMenuGraceTicks >= 2 && mc.currentScreen == null) {
+                boolean noRemote = mc.thePlayer.openContainer == null || mc.thePlayer.openContainer.windowId == 0;
+                // Bug1修复: 超时保护，100 ticks (5秒) 后即使 windowId 未归零也强制恢复
+                boolean forceRestore = state.camera.remoteMenuGraceTicks > 100;
+                if (mc.currentScreen == null && (noRemote || forceRestore) && state.camera.remoteMenuGraceTicks >= 2) {
+                    com.rtsbuilding.rtsbuilding.compat.remote.RtsRemoteMenuCompat.endRemoteSession(mc.thePlayer);
                     if (!(mc.renderViewEntity instanceof com.rtsbuilding.rtsbuilding.entity.RtsCameraEntity)) {
                         state.camera.localMirror = new com.rtsbuilding.rtsbuilding.entity.RtsCameraEntity(mc.theWorld);
                         state.camera.localMirror.setPosition(state.camera.posX, state.camera.posY, state.camera.posZ);
@@ -268,16 +262,22 @@ public class ClientProxy extends CommonProxy {
                         state.camera.localMirror.rotationPitch = state.camera.rotationPitch;
                         mc.renderViewEntity = state.camera.localMirror;
                     }
-                    mc.displayGuiScreen(new com.rtsbuilding.rtsbuilding.client.RtsScreen());
+                    // Bug1修复: 使用 displayGuiScreen 正常流程恢复 RtsScreen
+                    if (savedRtsScreen != null) {
+                        mc.displayGuiScreen(savedRtsScreen);
+                        savedRtsScreen = null;
+                    } else {
+                        mc.displayGuiScreen(new com.rtsbuilding.rtsbuilding.client.RtsScreen());
+                    }
                     hasRemoteMenuOpen = false;
                     state.camera.remoteMenuGraceTicks = 0;
                 }
             }
         }
 
-        /** Bug6修复：标记远程菜单打开 grace */
+        /** Bug1修复: 标记远程菜单打开 grace 期，对齐原版 beginRemoteMenuOpenGrace() */
         public static void beginRemoteMenuOpenGrace() {
-            RtsClientState.get().camera.remoteMenuGraceTicks = 80;
+            com.rtsbuilding.rtsbuilding.client.RtsClientState.get().camera.pendingRemoteMenuOpenTicks = 80;
         }
     }
 

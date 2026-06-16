@@ -454,9 +454,9 @@ public class RtsInteractionHandler {
 
     /**
      * 交互模式右键：
-     * - 有选中物品 → 放置方块
+     * - 有选中物品且是方块 → 放置方块
+     * - 有选中物品但非方块（水桶、食物等） → 通过交互消息使用物品
      * - 空手 → 交互（打开方块GUI / 实体交互）
-     * - 有选中流体 → 流体放置（TODO）
      */
     private boolean handleInteractRightClick(MovingObjectPosition hit, Vec3 origin, Vec3 dir) {
         String blockId = state.interaction.selectedBlockId;
@@ -468,19 +468,19 @@ public class RtsInteractionHandler {
             if (entityId != C2SRtsInteractMessage.NO_ENTITY) {
                 return sendInteractMessageWithEntity(entityId, hit, origin, dir);
             }
-            return sendInteractMessage(hit, origin, dir);
+            return sendInteractMessage(hit, origin, dir, null);
         }
 
         // 有选中物品
         ItemStack prototype = createBlockStack(blockId, meta);
         if (prototype == null) {
-            // 问题15: 非方块物品 → 先尝试实体交互，再使用物品
+            // Bug11修复: 非方块物品（水桶、铁桶、食物等）→ 先检测实体，再走 InteractMessage 路径
+            // 关键改动：使用 C2SRtsInteractMessage（含完整临时传送逻辑）替代 C2SRtsUseItemMessage
             int entityId = findEntityHit(origin, dir);
             if (entityId != C2SRtsInteractMessage.NO_ENTITY) {
                 return sendInteractMessageWithEntity(entityId, hit, origin, dir);
             }
-            // 手持物品使用（食物、药水、工具等）
-            return sendUseItemMessage(hit);
+            return sendInteractMessage(hit, origin, dir, blockId);
         }
 
         return sendPlaceMessage(hit, origin, dir, blockId, prototype);
@@ -488,6 +488,9 @@ public class RtsInteractionHandler {
 
     private boolean sendPlaceMessage(MovingObjectPosition hit, Vec3 origin, Vec3 dir, String blockId,
         ItemStack prototype) {
+        // Bug1修复: grace 期防闪烁（placement 可能触发容器变更是罕见的，但安全起见加上）
+        com.rtsbuilding.rtsbuilding.ClientProxy.RtsKeyHandler.beginRemoteMenuOpenGrace();
+
         C2SRtsPlaceMessage msg = new C2SRtsPlaceMessage(
             hit.blockX,
             hit.blockY,
@@ -512,7 +515,17 @@ public class RtsInteractionHandler {
         return true;
     }
 
-    private boolean sendInteractMessage(MovingObjectPosition hit, Vec3 origin, Vec3 dir) {
+    /**
+     * Bug11修复: 发送方块交互消息。支持传入 itemId 用于非方块物品的使用。
+     * 
+     * @param itemId 非空时表示使用 RTS 存储中选中的物品（如水桶），空则表示空手交互
+     */
+    private boolean sendInteractMessage(MovingObjectPosition hit, Vec3 origin, Vec3 dir, String itemId) {
+        // Bug1修复: 通知 RTS key handler 进入 grace 期，防止远程容器打开期间 RTS 屏幕闪烁
+        com.rtsbuilding.rtsbuilding.ClientProxy.RtsKeyHandler.beginRemoteMenuOpenGrace();
+
+        byte toolSlot = (byte) state.interaction.selectedToolSlot;
+        if (toolSlot < 0 || toolSlot >= 9) toolSlot = 0;
         C2SRtsInteractMessage msg = new C2SRtsInteractMessage(
             C2SRtsInteractMessage.NO_ENTITY,
             hit.blockX,
@@ -523,8 +536,8 @@ public class RtsInteractionHandler {
             hit.hitVec.yCoord,
             hit.hitVec.zCoord,
             C2SRtsInteractMessage.SOURCE_TOOL_SLOT,
-            (byte) 0,
-            "",
+            toolSlot,
+            itemId != null ? itemId : "",
             origin.xCoord,
             origin.yCoord,
             origin.zCoord,
@@ -539,6 +552,8 @@ public class RtsInteractionHandler {
      * 问题15: 发送手持物品使用消息（食物、药水、工具等非方块物品）。
      */
     private boolean sendUseItemMessage(MovingObjectPosition hit) {
+        byte toolSlot = (byte) state.interaction.selectedToolSlot;
+        if (toolSlot < 0 || toolSlot >= 9) toolSlot = 0;
         com.rtsbuilding.rtsbuilding.network.builder.C2SRtsUseItemMessage msg = new com.rtsbuilding.rtsbuilding.network.builder.C2SRtsUseItemMessage(
             hit.blockX,
             hit.blockY,
@@ -546,7 +561,9 @@ public class RtsInteractionHandler {
             (byte) hit.sideHit,
             hit.hitVec.xCoord,
             hit.hitVec.yCoord,
-            hit.hitVec.zCoord);
+            hit.hitVec.zCoord,
+            toolSlot,
+            state.interaction.selectedBlockId);
         RtsNetworkManager.NETWORK.sendToServer(msg);
         return true;
     }
@@ -625,9 +642,39 @@ public class RtsInteractionHandler {
         double closestDist = Double.MAX_VALUE;
         int closestEntityId = C2SRtsInteractMessage.NO_ENTITY;
 
-        // 先做方块射线检测，获取方块命中距离作为实体检测上限
         MovingObjectPosition blockHit = world.rayTraceBlocks(start, end);
         double blockDist = blockHit != null ? start.distanceTo(blockHit.hitVec) : RAY_REACH;
+
+        boolean ctrlHeld = org.lwjgl.input.Keyboard.isKeyDown(org.lwjgl.input.Keyboard.KEY_LCONTROL)
+            || org.lwjgl.input.Keyboard.isKeyDown(org.lwjgl.input.Keyboard.KEY_RCONTROL);
+
+        // Ctrl 吸附：以射线命中点为中心 3x3x3 范围搜索实体
+        if (ctrlHeld && blockHit != null) {
+            double snapX = blockHit.hitVec.xCoord;
+            double snapY = blockHit.hitVec.yCoord;
+            double snapZ = blockHit.hitVec.zCoord;
+            net.minecraft.util.AxisAlignedBB snapAABB = net.minecraft.util.AxisAlignedBB
+                .getBoundingBox(snapX - 1.5D, snapY - 1.5D, snapZ - 1.5D, snapX + 1.5D, snapY + 1.5D, snapZ + 1.5D);
+
+            for (Object obj : world.loadedEntityList) {
+                if (!(obj instanceof net.minecraft.entity.Entity)) continue;
+                net.minecraft.entity.Entity entity = (net.minecraft.entity.Entity) obj;
+                if (!entity.isEntityAlive()) continue;
+                if (entity == mc.thePlayer) continue;
+
+                if (entity.boundingBox.intersectsWith(snapAABB)) {
+                    double dx = entity.posX - snapX;
+                    double dy = entity.posY - snapY;
+                    double dz = entity.posZ - snapZ;
+                    double dist = dx * dx + dy * dy + dz * dz;
+                    if (dist < closestDist) {
+                        closestDist = dist;
+                        closestEntityId = entity.getEntityId();
+                    }
+                }
+            }
+            return closestEntityId;
+        }
 
         for (Object obj : world.loadedEntityList) {
             if (!(obj instanceof net.minecraft.entity.Entity)) continue;
@@ -635,12 +682,12 @@ public class RtsInteractionHandler {
             if (!entity.isEntityAlive()) continue;
             if (entity == mc.thePlayer) continue;
 
-            float expand = entity.getCollisionBorderSize();
+            float expand = entity.getCollisionBorderSize() + 1.0F;
             net.minecraft.util.AxisAlignedBB aabb = entity.boundingBox.expand(expand, expand, expand);
             MovingObjectPosition entityHit = aabb.calculateIntercept(start, end);
             if (entityHit != null) {
                 double dist = start.distanceTo(entityHit.hitVec);
-                if (dist < closestDist && dist < blockDist) {
+                if (dist < closestDist) {
                     closestDist = dist;
                     closestEntityId = entity.getEntityId();
                 }
@@ -653,6 +700,11 @@ public class RtsInteractionHandler {
      * 发送带 entityId 的交互消息（实体交互优先）。
      */
     private boolean sendInteractMessageWithEntity(int entityId, MovingObjectPosition hit, Vec3 origin, Vec3 dir) {
+        // Bug1修复: grace 期防闪烁
+        com.rtsbuilding.rtsbuilding.ClientProxy.RtsKeyHandler.beginRemoteMenuOpenGrace();
+
+        byte toolSlot = (byte) state.interaction.selectedToolSlot;
+        if (toolSlot < 0 || toolSlot >= 9) toolSlot = 0;
         C2SRtsInteractMessage msg = new C2SRtsInteractMessage(
             entityId,
             hit.blockX,
@@ -663,7 +715,7 @@ public class RtsInteractionHandler {
             hit.hitVec.yCoord,
             hit.hitVec.zCoord,
             C2SRtsInteractMessage.SOURCE_TOOL_SLOT,
-            (byte) 0,
+            toolSlot,
             "",
             origin.xCoord,
             origin.yCoord,

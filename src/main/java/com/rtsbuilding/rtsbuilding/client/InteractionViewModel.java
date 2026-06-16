@@ -26,6 +26,8 @@ public class InteractionViewModel {
     // ---- 建造 ----
     public String selectedBlockId = "";
     public int selectedBlockMeta = 0;
+    /** 选中工具的背包槽位（0-8），用于 RTS 交互时使用对应工具 */
+    public int selectedToolSlot = -1;
 
     // ---- 快速建造 ----
     public boolean quickBuildActive = false;
@@ -126,6 +128,25 @@ public class InteractionViewModel {
         }
     }
 
+    /** GUI 绑定槽位数据（来自服务端） */
+    public static class GuiBindingSlot {
+
+        public final int x;
+        public final int y;
+        public final int z;
+        public final int dimensionId;
+
+        public GuiBindingSlot(int x, int y, int z, int dimensionId) {
+            this.x = x;
+            this.y = y;
+            this.z = z;
+            this.dimensionId = dimensionId;
+        }
+    }
+
+    /** 已绑定的 GUI 槽位列表（索引 = 槽位号 0-7） */
+    public final List<GuiBindingSlot> guiBindings = new ArrayList<>();
+
     public void addRecentBlock(String blockId) {
         recentBlocks.remove(blockId);
         recentBlocks.add(0, blockId);
@@ -147,6 +168,7 @@ public class InteractionViewModel {
         currentMode = BuilderMode.OFF;
         selectedBlockId = "";
         selectedBlockMeta = 0;
+        selectedToolSlot = -1;
         quickBuildActive = false;
         quickBuildShape = "block";
         quickBuildFill = "fill";
@@ -162,6 +184,7 @@ public class InteractionViewModel {
         bindingEditMode = false;
         guiBindingCaptureActive = false;
         guiBindingCaptureSlot = -1;
+        guiBindings.clear();
         funnelActive = false;
         funnelTargetItemId = "";
         funnelRangeSize = 5;

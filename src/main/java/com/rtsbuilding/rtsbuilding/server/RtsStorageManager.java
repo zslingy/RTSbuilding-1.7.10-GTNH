@@ -100,6 +100,34 @@ public final class RtsStorageManager {
         tickFunnels(world, worldTime);
     }
 
+    /**
+     * 注册 ServerTickEvent 监听器到 FML 事件总线。
+     * 由 CommonProxy.init() 调用。驱动漏斗 tick 和 AE2 定期刷新。
+     */
+    public static void register() {
+        cpw.mods.fml.common.FMLCommonHandler.instance()
+            .bus()
+            .register(new TickHandler());
+        RtsbuildingMod.LOGGER.info("RtsStorageManager: registered ServerTickEvent handler");
+    }
+
+    public static class TickHandler {
+
+        @cpw.mods.fml.common.eventhandler.SubscribeEvent
+        public void onTick(cpw.mods.fml.common.gameevent.TickEvent.ServerTickEvent event) {
+            if (event.phase != cpw.mods.fml.common.gameevent.TickEvent.Phase.END) return;
+
+            net.minecraft.server.MinecraftServer server = net.minecraft.server.MinecraftServer.getServer();
+            if (server == null) return;
+
+            for (net.minecraft.world.WorldServer world : server.worldServers) {
+                if (world != null) {
+                    onServerTick(world);
+                }
+            }
+        }
+    }
+
     private static void tickFunnels(WorldServer world, long worldTime) {
         if (worldTime % 2 != 0) return;
 
@@ -891,6 +919,21 @@ public final class RtsStorageManager {
         RtsStorageSession.PageResult result = session.queryPage("name_asc", page, 88);
         java.util.List<net.minecraft.item.ItemStack> stacks = session.toItemStacks(result.items);
 
+        RtsbuildingMod.LOGGER.debug(
+            "sendStoragePage: player={}, hasAe2={}, isAe2Linked={}, isContainerLinked={}, linkedCount={}, sessionEntries={}, resultItems={}, stacks={}, page={}, totalPages={}",
+            player.getDisplayName(),
+            hasAe2,
+            session.isAe2Linked(),
+            session.isContainerLinked(),
+            session.getLinkedStorages()
+                .size(),
+            session.getItemCounts()
+                .size(),
+            result.items.size(),
+            stacks.size(),
+            result.page,
+            result.totalPages);
+
         // 构建已链接存储并行数组
         java.util.List<com.rtsbuilding.rtsbuilding.server.storage.LinkedStorageRef> refs = session.getLinkedStorages();
         int linkedCount = refs.size();
@@ -927,14 +970,35 @@ public final class RtsStorageManager {
             linkedCount++;
         }
 
+        // 构建 GUI 绑定数组（8 个槽位，-1 表示未绑定）
+        com.rtsbuilding.rtsbuilding.server.storage.GuiBinding[] guiBindings = session.getGuiBindings();
+        int[] guiBindingX = new int[8];
+        int[] guiBindingY = new int[8];
+        int[] guiBindingZ = new int[8];
+        int[] guiBindingDimIds = new int[8];
+        for (int i = 0; i < 8; i++) {
+            if (guiBindings[i] != null) {
+                guiBindingX[i] = guiBindings[i].x;
+                guiBindingY[i] = guiBindings[i].y;
+                guiBindingZ[i] = guiBindings[i].z;
+                guiBindingDimIds[i] = guiBindings[i].dimensionId;
+            } else {
+                guiBindingX[i] = -1;
+                guiBindingY[i] = -1;
+                guiBindingZ[i] = -1;
+                guiBindingDimIds[i] = -1;
+            }
+        }
+
         RtsbuildingMod.LOGGER.debug(
-            "sendStoragePage: player={}, hasAe2={}, sessionEmpty={}, items={}, stacks={}, linkedEntries={}, page={}, totalPages={}",
+            "sendStoragePage: player={}, hasAe2={}, sessionEmpty={}, items={}, stacks={}, linkedEntries={}, guiBindings={}, page={}, totalPages={}",
             player.getDisplayName(),
             hasAe2,
             session.isEmpty(),
             result.items.size(),
             stacks.size(),
             linkedCount,
+            guiBindings.length,
             result.page,
             result.totalPages);
 
@@ -948,7 +1012,11 @@ public final class RtsStorageManager {
             linkedY,
             linkedZ,
             linkedModes,
-            linkedPriorities);
+            linkedPriorities,
+            guiBindingX,
+            guiBindingY,
+            guiBindingZ,
+            guiBindingDimIds);
         com.rtsbuilding.rtsbuilding.network.RtsNetworkManager.NETWORK.sendTo(response, player);
     }
 }

@@ -299,6 +299,17 @@ public class RtsTopBarPanel implements IRtsPanel {
     }
 
     private void handleButtonClick(BtnId id) {
+        // 切换模式时先重置漏斗激活状态
+        if (id != BtnId.FUNNEL && state.interaction.funnelActive) {
+            state.interaction.funnelActive = false;
+            state.interaction.funnelHasTarget = false;
+            // 关闭漏斗面板
+            GuiScreen scr = Minecraft.getMinecraft().currentScreen;
+            if (scr instanceof com.rtsbuilding.rtsbuilding.client.RtsScreen) {
+                ((com.rtsbuilding.rtsbuilding.client.RtsScreen) scr).getFunnelPanel()
+                    .setOpen(false);
+            }
+        }
         switch (id) {
             case INTERACT:
                 state.interaction.currentMode = BuilderMode.INTERACT;

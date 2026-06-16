@@ -6,6 +6,7 @@ import java.util.List;
 import net.minecraft.client.Minecraft;
 import net.minecraft.item.ItemStack;
 
+import com.rtsbuilding.rtsbuilding.client.InteractionViewModel;
 import com.rtsbuilding.rtsbuilding.client.RtsClientState;
 import com.rtsbuilding.rtsbuilding.client.StorageViewModel;
 import com.rtsbuilding.rtsbuilding.client.StorageViewModel.StorageEntry;
@@ -33,6 +34,10 @@ public class S2CRtsStoragePageMessage implements IMessage {
     private int[] linkedZ = new int[0];
     private byte[] linkedModes = new byte[0];
     private int[] linkedPriorities = new int[0];
+    private int[] guiBindingX = new int[0];
+    private int[] guiBindingY = new int[0];
+    private int[] guiBindingZ = new int[0];
+    private int[] guiBindingDimIds = new int[0];
 
     public S2CRtsStoragePageMessage() {}
 
@@ -47,11 +52,16 @@ public class S2CRtsStoragePageMessage implements IMessage {
             new int[0],
             new int[0],
             new byte[0],
+            new int[0],
+            new int[0],
+            new int[0],
+            new int[0],
             new int[0]);
     }
 
     public S2CRtsStoragePageMessage(int page, int totalPages, int windowId, List<ItemStack> stacks, int[] linkedDimIds,
-        int[] linkedX, int[] linkedY, int[] linkedZ, byte[] linkedModes, int[] linkedPriorities) {
+        int[] linkedX, int[] linkedY, int[] linkedZ, byte[] linkedModes, int[] linkedPriorities, int[] guiBindingX,
+        int[] guiBindingY, int[] guiBindingZ, int[] guiBindingDimIds) {
         this.page = page;
         this.totalPages = totalPages;
         this.windowId = windowId;
@@ -62,6 +72,10 @@ public class S2CRtsStoragePageMessage implements IMessage {
         this.linkedZ = linkedZ != null ? linkedZ : new int[0];
         this.linkedModes = linkedModes != null ? linkedModes : new byte[0];
         this.linkedPriorities = linkedPriorities != null ? linkedPriorities : new int[0];
+        this.guiBindingX = guiBindingX != null ? guiBindingX : new int[0];
+        this.guiBindingY = guiBindingY != null ? guiBindingY : new int[0];
+        this.guiBindingZ = guiBindingZ != null ? guiBindingZ : new int[0];
+        this.guiBindingDimIds = guiBindingDimIds != null ? guiBindingDimIds : new int[0];
     }
 
     @Override
@@ -87,6 +101,15 @@ public class S2CRtsStoragePageMessage implements IMessage {
             buf.writeInt(linkedZ[i]);
             buf.writeByte(linkedModes[i]);
             buf.writeInt(linkedPriorities[i]);
+        }
+        // GUI bindings (8 slots)
+        int guiBindCount = Math.min(guiBindingX.length, 8);
+        buf.writeInt(guiBindCount);
+        for (int i = 0; i < guiBindCount; i++) {
+            buf.writeInt(guiBindingX[i]);
+            buf.writeInt(guiBindingY[i]);
+            buf.writeInt(guiBindingZ[i]);
+            buf.writeInt(guiBindingDimIds[i]);
         }
     }
 
@@ -116,6 +139,18 @@ public class S2CRtsStoragePageMessage implements IMessage {
             linkedZ[i] = buf.readInt();
             linkedModes[i] = buf.readByte();
             linkedPriorities[i] = buf.readInt();
+        }
+        // GUI bindings
+        int guiBindCount = Math.max(0, Math.min(buf.readInt(), 8));
+        guiBindingX = new int[guiBindCount];
+        guiBindingY = new int[guiBindCount];
+        guiBindingZ = new int[guiBindCount];
+        guiBindingDimIds = new int[guiBindCount];
+        for (int i = 0; i < guiBindCount; i++) {
+            guiBindingX[i] = buf.readInt();
+            guiBindingY[i] = buf.readInt();
+            guiBindingZ[i] = buf.readInt();
+            guiBindingDimIds[i] = buf.readInt();
         }
     }
 
@@ -163,6 +198,26 @@ public class S2CRtsStoragePageMessage implements IMessage {
         return linkedDimIds.length;
     }
 
+    public int[] getGuiBindingX() {
+        return guiBindingX;
+    }
+
+    public int[] getGuiBindingY() {
+        return guiBindingY;
+    }
+
+    public int[] getGuiBindingZ() {
+        return guiBindingZ;
+    }
+
+    public int[] getGuiBindingDimIds() {
+        return guiBindingDimIds;
+    }
+
+    public int getGuiBindingCount() {
+        return guiBindingX.length;
+    }
+
     public static class Handler implements IMessageHandler<S2CRtsStoragePageMessage, IMessage> {
 
         @Override
@@ -202,6 +257,18 @@ public class S2CRtsStoragePageMessage implements IMessage {
                 svm.linkedStoragePositions.add(new com.rtsbuilding.rtsbuilding.util.BlockPos(lx[i], ly[i], lz[i]));
             }
             svm.linkedStorageCount = linkedCount;
+
+            // 更新 GUI 绑定数据
+            InteractionViewModel ivm = state.interaction;
+            ivm.guiBindings.clear();
+            int guiBindCount = msg.getGuiBindingCount();
+            int[] gx = msg.getGuiBindingX();
+            int[] gy = msg.getGuiBindingY();
+            int[] gz = msg.getGuiBindingZ();
+            int[] gDim = msg.getGuiBindingDimIds();
+            for (int i = 0; i < guiBindCount; i++) {
+                ivm.guiBindings.add(new InteractionViewModel.GuiBindingSlot(gx[i], gy[i], gz[i], gDim[i]));
+            }
 
             // 清除 dirty 标记
             svm.dirty = false;

@@ -143,8 +143,11 @@ public class CameraInputHelper {
      * 在发送网络消息之前调用，将当前所有输入（键盘移动+旋转+滚轮+拖拽平移）
      * 应用到本地相机状态，实现即时视觉反馈。
      * 对齐原版 ClientRtsController.applyLocalPrediction() 的完整逻辑。
+     *
+     * @param tickDelta 帧时间缩放因子（1.0 = 标准tick速率，<1.0 = 慢帧，>1.0 = 快帧）
+     *                  平滑镜头模式下基于纳秒帧时间差计算，非平滑模式下为 1.0
      */
-    public void applyFullLocalPrediction() {
+    public void applyFullLocalPrediction(float tickDelta) {
         CameraViewModel camera = state.camera;
         if (!camera.isActive) return;
 
@@ -167,10 +170,10 @@ public class CameraInputHelper {
             && Math.abs(panX) < EPSILON
             && Math.abs(panY) < EPSILON) return;
 
-        // ---- Bug2a修复：旋转本地预测 ----
-        camera.rotationYaw += rotateX * ROTATE_GAIN_X;
+        // ---- Bug2a修复：旋转本地预测（tickDelta缩放实现帧率无关） ----
+        camera.rotationYaw += rotateX * ROTATE_GAIN_X * tickDelta;
         camera.rotationPitch = MathHelper
-            .clamp_float(camera.rotationPitch + rotateY * ROTATE_GAIN_Y, MIN_PITCH, MAX_PITCH);
+            .clamp_float(camera.rotationPitch + rotateY * ROTATE_GAIN_Y * tickDelta, MIN_PITCH, MAX_PITCH);
 
         // ---- 移动计算 ----
         double yawRad = Math.toRadians(camera.rotationYaw);
@@ -221,10 +224,10 @@ public class CameraInputHelper {
             dz += rightZ * moveRight + fwdZ * moveForward;
         }
 
-        // ---- 应用移动 ----
-        camera.posX += dx;
-        camera.posY += dy;
-        camera.posZ += dz;
+        // ---- 应用移动（tickDelta 缩放实现帧率无关的平滑移动） ----
+        camera.posX += dx * tickDelta;
+        camera.posY += dy * tickDelta;
+        camera.posZ += dz * tickDelta;
 
         // ---- 边界 clamping ----
         double halfExtent = camera.maxRadius;

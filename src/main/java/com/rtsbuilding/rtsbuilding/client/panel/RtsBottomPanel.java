@@ -17,6 +17,7 @@ import org.lwjgl.opengl.GL11;
 
 import com.rtsbuilding.rtsbuilding.client.CraftViewModel.CraftableEntry;
 import com.rtsbuilding.rtsbuilding.client.InteractionViewModel;
+import com.rtsbuilding.rtsbuilding.client.InteractionViewModel.GuiBindingEntry;
 import com.rtsbuilding.rtsbuilding.client.RtsClientState;
 import com.rtsbuilding.rtsbuilding.client.RtsScreen;
 import com.rtsbuilding.rtsbuilding.client.StorageViewModel;
@@ -386,20 +387,48 @@ public class RtsBottomPanel implements IRtsPanel {
         int[][] offsets = { { -ss - sg, -ss - sg }, { 0, -ss - sg }, { cs + sg, -ss - sg }, { -ss - sg, 0 },
             { cs + sg, 0 }, { -ss - sg, cs + sg }, { 0, cs + sg }, { cs + sg, cs + sg } };
 
+        InteractionViewModel ivm = state.interaction;
         for (int i = 0; i < CRAFT_DOCK_SLOT_COUNT; i++) {
             int sx = cX + offsets[i][0];
             int sy = cY + offsets[i][1];
-            int bg = 0xAA202731;
+            GuiBindingEntry binding = i < ivm.bindings.size() ? ivm.bindings.get(i) : null;
+            boolean isBound = binding != null && binding.boundItemId != null && !binding.boundItemId.isEmpty();
+            boolean isCapturing = ivm.guiBindingCaptureActive && ivm.guiBindingCaptureSlot == i;
+
+            int bg;
+            if (isCapturing) {
+                bg = 0xCC2D6B47;
+            } else if (isBound) {
+                bg = 0xAA23384A;
+            } else {
+                bg = 0xAA202731;
+            }
             if (mouseX >= sx && mouseX <= sx + ss && mouseY >= sy && mouseY <= sy + ss) {
-                bg = 0xBB29323D;
+                bg = isCapturing ? 0xDD377F53 : (isBound ? 0xBB2C4760 : 0xBB29323D);
                 hoveredCraftDockSlot = i;
             }
             Gui.drawRect(sx, sy, sx + ss, sy + ss, bg);
             Gui.drawRect(sx, sy, sx + ss, sy + 1, 0xFF698097);
             Gui.drawRect(sx, sy + ss - 1, sx + ss, sy + ss, 0xFF0F151C);
-            // 在槽位中显示槽位编号 (0-7)
-            String label = String.valueOf(i);
-            fr.drawString(label, sx + ss / 2 - fr.getStringWidth(label) / 2, sy + 1, 0xFFB0B0B0);
+
+            if (isBound) {
+                String itemIdStr = binding.boundItemId;
+                if (itemIdStr == null) {
+                    itemIdStr = "";
+                }
+                ItemStack boundStack = state.storage.resolveStack(itemIdStr, binding.boundItemMeta);
+                if (boundStack != null && boundStack.getItem() != null) {
+                    GL11.glPushMatrix();
+                    GL11.glEnable(GL11.GL_BLEND);
+                    RenderHelper.enableGUIStandardItemLighting();
+                    renderItem.renderItemAndEffectIntoGUI(fr, screen.mc.renderEngine, boundStack, sx + 1, sy + 1);
+                    RenderHelper.disableStandardItemLighting();
+                    GL11.glDisable(GL11.GL_BLEND);
+                    GL11.glPopMatrix();
+                }
+            } else {
+                fr.drawString("+" + String.valueOf(i), sx + 1, sy + 1, 0xFFB0B0B0);
+            }
         }
     }
 
@@ -670,10 +699,16 @@ public class RtsBottomPanel implements IRtsPanel {
                         String itemId = net.minecraft.item.Item.itemRegistry.getNameForObject(stack.getItem());
                         state.interaction.selectedBlockId = itemId;
                         state.interaction.selectedBlockMeta = stack.getItemDamage();
+                        state.interaction.selectedToolSlot = hoveredToolSlot;
+                    } else {
+                        state.interaction.selectedBlockId = "";
+                        state.interaction.selectedBlockMeta = 0;
+                        state.interaction.selectedToolSlot = hoveredToolSlot;
                     }
                 } else {
                     state.interaction.selectedBlockId = "";
                     state.interaction.selectedBlockMeta = 0;
+                    state.interaction.selectedToolSlot = -1;
                 }
                 return true;
             }

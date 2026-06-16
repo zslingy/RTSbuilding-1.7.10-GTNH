@@ -71,6 +71,7 @@ src/main/java/com/rtsbuilding/rtsbuilding/
 - `错误日志.txt` — Build error log
 
 ## Language Convention (Chinese)
-- **日常交流**：使用简体中文
+- **日常交流**：使用简体中文。
+- **思考过程**：使用简体中文。
 - **代码注释**：使用简体中文，涉及编程术语时保留英文原文
 - **Git Commit**：使用中文，格式遵循 "feat: 新增功能"

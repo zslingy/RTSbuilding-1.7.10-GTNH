@@ -270,20 +270,21 @@ public class C2SRtsPlaceMessage implements IMessage {
                 meta = rotation;
             }
 
-            // Step 1: 消耗物品（先消耗，成功才放置）
+            // Step 1: 消耗物品（创造模式直接跳过）
             boolean hasLinkedStorage = RtsStorageManager.getSession(player)
                 .isAnyLinked();
+            boolean isCreative = player.capabilities.isCreativeMode;
             boolean consumed = false;
-            net.minecraft.item.ItemStack consumedStack = null; // 用于放置失败时回滚
-            boolean consumedFromInventory = false; // 标记是否从背包扣取（用于回滚）
+            net.minecraft.item.ItemStack consumedStack = null;
+            boolean consumedFromInventory = false;
 
-            if (hasLinkedStorage) {
-                // 链接存储：优先从存储消耗
+            if (isCreative) {
+                consumed = true;
+            } else if (hasLinkedStorage) {
                 consumed = RtsStorageManager.tryConsumeBlock(player, msg.itemId, meta, 1);
             }
 
-            // 存储扣取失败 → 尝试从玩家背包扣取（非创造模式）
-            if (!consumed && !player.capabilities.isCreativeMode) {
+            if (!consumed) {
                 net.minecraft.item.Item blockItem = net.minecraft.item.Item.getItemFromBlock(block);
                 if (blockItem != null) {
                     for (int i = 0; i < player.inventory.mainInventory.length; i++) {
@@ -303,8 +304,6 @@ public class C2SRtsPlaceMessage implements IMessage {
                         player.inventoryContainer.detectAndSendChanges();
                     }
                 }
-            } else if (!hasLinkedStorage && player.capabilities.isCreativeMode) {
-                consumed = true; // 创造模式不需要消耗
             }
 
             if (!consumed) {
@@ -363,16 +362,14 @@ public class C2SRtsPlaceMessage implements IMessage {
                 }
             }
 
-            // Step 4: 放置失败则回滚消耗
+            // Step 4: 放置失败则回滚消耗（创造模式不需要）
             if (!placed) {
-                if (!player.capabilities.isCreativeMode) {
-                    if (consumedFromInventory) {
-                        player.inventory.addItemStackToInventory(consumedStack);
-                        player.inventoryContainer.detectAndSendChanges();
-                    } else if (hasLinkedStorage) {
-                        RtsStorageManager.getSession(player)
-                            .addItem(msg.itemId, meta, 1);
-                    }
+                if (consumedFromInventory) {
+                    player.inventory.addItemStackToInventory(consumedStack);
+                    player.inventoryContainer.detectAndSendChanges();
+                } else if (!isCreative && hasLinkedStorage) {
+                    RtsStorageManager.getSession(player)
+                        .addItem(msg.itemId, meta, 1);
                 }
                 RtsbuildingMod.LOGGER.debug(
                     "C2SRtsPlaceMessage: placement failed for {} at ({}, {}, {}), rolled back consumption",
@@ -399,6 +396,11 @@ public class C2SRtsPlaceMessage implements IMessage {
                 msg.clickedY,
                 msg.clickedZ,
                 player.getDisplayName());
+
+            // 问题4修复：放置成功后刷新存储页面
+            if (consumed) {
+                RtsStorageManager.sendStoragePage(player, 0, 0);
+            }
 
             return null;
         }

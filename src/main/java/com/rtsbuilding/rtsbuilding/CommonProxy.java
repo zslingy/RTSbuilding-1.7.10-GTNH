@@ -42,6 +42,9 @@ public class CommonProxy {
         // ── Bug2修复：注册渐进式挖掘管理器（ServerTickEvent 推进挖掘进度） ──
         com.rtsbuilding.rtsbuilding.server.RtsMineManager.register();
 
+        // ── 注册存储管理器 tick（驱动漏斗拾取和 AE2 定期刷新） ──
+        com.rtsbuilding.rtsbuilding.server.RtsStorageManager.register();
+
         // ── Bug5修复：注册蓝图放置服务（ServerTickEvent 推进蓝图放置） ──
         FMLCommonHandler.instance()
             .bus()

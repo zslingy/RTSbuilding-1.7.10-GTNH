@@ -30,7 +30,7 @@ import cpw.mods.fml.common.registry.GameData;
 public class RecentGridView implements IRtsPanel {
 
     private static final String PANEL_NAME = "recent_grid";
-    private static final int SLOT_SIZE = 14; // Issue 5: 与快捷栏格子大小一致
+    private static final int SLOT_SIZE = 18;
     private static final int COLS = 20;
     private static final int ROWS_COUNT = 2;
 

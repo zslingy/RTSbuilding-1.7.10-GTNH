@@ -78,11 +78,17 @@ public final class RtsMineManager {
      */
     public static void startMining(EntityPlayerMP player, int x, int y, int z, byte face, byte toolSlot,
         String toolItemId, ItemStack toolPrototype, boolean allowPlacedBlockRecovery) {
-        startMining(player, x, y, z, face, toolSlot, toolItemId, toolPrototype, allowPlacedBlockRecovery, false);
+        startMining(player, x, y, z, face, toolSlot, toolItemId, toolPrototype, allowPlacedBlockRecovery, false, 64);
     }
 
     public static void startMining(EntityPlayerMP player, int x, int y, int z, byte face, byte toolSlot,
         String toolItemId, ItemStack toolPrototype, boolean allowPlacedBlockRecovery, boolean ultimine) {
+        startMining(player, x, y, z, face, toolSlot, toolItemId, toolPrototype, allowPlacedBlockRecovery, ultimine, 64);
+    }
+
+    public static void startMining(EntityPlayerMP player, int x, int y, int z, byte face, byte toolSlot,
+        String toolItemId, ItemStack toolPrototype, boolean allowPlacedBlockRecovery, boolean ultimine,
+        int ultimineLimit) {
         if (PipelineRegistry.has(RtsWorkflowType.MINE_SINGLE)) {
             Map<String, Object> args = new HashMap<String, Object>();
             args.put(MiningExecutePipe.KEY_X.name(), Integer.valueOf(x));
@@ -93,6 +99,10 @@ public final class RtsMineManager {
             args.put(MiningExecutePipe.KEY_TOOL_ITEM_ID.name(), toolItemId);
             args.put(MiningExecutePipe.KEY_TOOL_PROTOTYPE.name(), toolPrototype);
             args.put(MiningExecutePipe.KEY_ALLOW_PLACED_RECOVERY.name(), Boolean.valueOf(allowPlacedBlockRecovery));
+            args.put(MiningExecutePipe.KEY_ULTIMINE.name(), Boolean.valueOf(ultimine));
+            args.put(
+                MiningExecutePipe.KEY_ULTIMINE_LIMIT.name(),
+                Integer.valueOf(Math.max(1, Math.min(ultimineLimit, 256))));
             @SuppressWarnings("unchecked")
             WorkflowPipeline<PipelineContext> pipeline = (WorkflowPipeline<PipelineContext>) PipelineRegistry
                 .get(RtsWorkflowType.MINE_SINGLE);
@@ -110,11 +120,13 @@ public final class RtsMineManager {
             toolItemId,
             toolPrototype,
             allowPlacedBlockRecovery,
-            ultimine);
+            ultimine,
+            Math.max(1, Math.min(ultimineLimit, 256)));
     }
 
     public static void startMiningDirect(EntityPlayerMP player, int x, int y, int z, byte face, byte toolSlot,
-        String toolItemId, ItemStack toolPrototype, boolean allowPlacedBlockRecovery, boolean ultimine) {
+        String toolItemId, ItemStack toolPrototype, boolean allowPlacedBlockRecovery, boolean ultimine,
+        int ultimineLimit) {
         if (player == null || player.worldObj == null) return;
         UUID uuid = player.getUniqueID();
 
@@ -159,17 +171,20 @@ public final class RtsMineManager {
 
         mine.speedMultiplier = computeSpeedMultiplier(player, actualTool, block, world, x, y, z);
 
-        // P0-4: 连锁模式预收集目标方块（在破坏前收集，避免破坏后中心方块为空气导致 BFS 失败）
+        // 连锁模式预收集目标方块，上限 = min(进度上限, 客户端滑块值)
         if (ultimine) {
-            int limit = RtsProgressionManager.getUltimineLimit(player);
-            mine.pendingChainBlocks = RtsUltimineCollector.collect(world, x, y, z, limit, 64);
+            int progressionLimit = RtsProgressionManager.getUltimineLimit(player);
+            int effectiveLimit = Math.max(1, Math.min(progressionLimit, ultimineLimit));
+            mine.pendingChainBlocks = RtsUltimineCollector.collect(world, x, y, z, effectiveLimit, 64);
             RtsbuildingMod.LOGGER.debug(
-                "RtsMineManager: {} pre-collected {} chain targets from ({},{},{})",
+                "RtsMineManager: {} pre-collected {} chain targets from ({},{},{}) limit={} progressionLimit={}",
                 player.getDisplayName(),
                 mine.pendingChainBlocks.size(),
                 x,
                 y,
-                z);
+                z,
+                effectiveLimit,
+                progressionLimit);
         }
 
         activeMines.put(uuid, mine);

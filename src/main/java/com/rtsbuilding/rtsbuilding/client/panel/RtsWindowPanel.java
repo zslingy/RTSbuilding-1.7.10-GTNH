@@ -23,6 +23,9 @@ public abstract class RtsWindowPanel implements IRtsPanel {
     private static final ResourceLocation CLOSE_BUTTON_TEXTURE = new ResourceLocation(
         "rtsbuilding",
         "textures/gui/general/close_button.png");
+    private static final int CLOSE_SHEET_W = 450;
+    private static final int CLOSE_SHEET_H = 900;
+    private static final int CLOSE_STATE_H = 450;
     private static final int SCREEN_MARGIN = 4;
     private static final int MIN_W = 80;
     private static final int MIN_H = 60;
@@ -232,7 +235,20 @@ public abstract class RtsWindowPanel implements IRtsPanel {
         if (hoverClose) {
             drawRect(cx, cy, cx + CLOSE_BTN_W, cy + CLOSE_BTN_W, 0x66552222);
         }
-        WindowButton.drawTexture(screen.mc, CLOSE_BUTTON_TEXTURE, cx, cy, CLOSE_BTN_W, CLOSE_BTN_W);
+        int closeV = hoverClose ? CLOSE_STATE_H : 0;
+        WindowButton.drawTexture(
+            screen.mc,
+            CLOSE_BUTTON_TEXTURE,
+            cx,
+            cy,
+            CLOSE_BTN_W,
+            CLOSE_BTN_W,
+            0,
+            closeV,
+            CLOSE_SHEET_W,
+            CLOSE_STATE_H,
+            CLOSE_SHEET_W,
+            CLOSE_SHEET_H);
     }
 
     // ==== GL11 渲染辅助 ====

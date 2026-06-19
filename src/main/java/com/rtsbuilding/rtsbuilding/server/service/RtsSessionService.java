@@ -45,10 +45,7 @@ public class RtsSessionService {
 
     public static void loadSessionNBT(EntityPlayerMP player) {
         if (player == null) return;
-        UUID id = RtsPlayerUtil.getUUID(player);
-        RtsStorageSession session = RtsStorageManager.getSessions()
-            .get(id);
-        if (session == null) return;
+        RtsStorageSession session = getSession(player);
         NBTTagCompound persistent = player.getEntityData();
         if (persistent.hasKey(NBT_STORAGE_ROOT, 10)) {
             session.readFromNBT(persistent.getCompoundTag(NBT_STORAGE_ROOT));

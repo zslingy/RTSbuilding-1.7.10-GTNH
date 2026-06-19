@@ -12,7 +12,7 @@ import com.rtsbuilding.rtsbuilding.client.RtsClientState;
 @Mixin(EntityClientPlayerMP.class)
 public abstract class LocalPlayerMixin {
 
-    @Inject(method = "onLivingUpdate", at = @At("HEAD"))
+    @Inject(method = "onUpdate", at = @At("HEAD"))
     private void rtsbuilding$freezeMovementInRtsMode(CallbackInfo ci) {
         if (RtsClientState.get().camera.isActive) {
             EntityClientPlayerMP self = (EntityClientPlayerMP) (Object) this;

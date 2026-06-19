@@ -15,8 +15,6 @@ import cpw.mods.fml.common.network.ByteBufUtils;
 import cpw.mods.fml.common.network.simpleimpl.IMessage;
 import cpw.mods.fml.common.network.simpleimpl.IMessageHandler;
 import cpw.mods.fml.common.network.simpleimpl.MessageContext;
-import cpw.mods.fml.relauncher.Side;
-import cpw.mods.fml.relauncher.SideOnly;
 import io.netty.buffer.ByteBuf;
 
 /**
@@ -221,66 +219,76 @@ public class S2CRtsStoragePageMessage implements IMessage {
     public static class Handler implements IMessageHandler<S2CRtsStoragePageMessage, IMessage> {
 
         @Override
-        @SideOnly(Side.CLIENT)
         public IMessage onMessage(S2CRtsStoragePageMessage msg, MessageContext ctx) {
-            Minecraft mc = Minecraft.getMinecraft();
-            if (mc == null) return null;
+            try {
+                Minecraft mc = Minecraft.getMinecraft();
+                if (mc == null) return null;
 
-            RtsClientState state = RtsClientState.get();
-            StorageViewModel svm = state.storage;
+                RtsClientState state = RtsClientState.get();
+                StorageViewModel svm = state.storage;
 
-            // 更新分页元数据
-            svm.currentPage = msg.getPage();
-            svm.totalPages = Math.max(1, msg.getTotalPages());
+                // 更新分页元数据
+                svm.currentPage = msg.getPage();
+                svm.totalPages = Math.max(1, msg.getTotalPages());
 
-            // 将 ItemStack 转换为 StorageEntry（直接存储 ItemStack，避免注册表查找失败）
-            svm.entries.clear();
-            for (ItemStack stack : msg.getStacks()) {
-                if (stack == null || stack.getItem() == null) continue;
-                String displayName = stack.getDisplayName();
-                svm.entries.add(new StorageEntry(stack, stack.stackSize, displayName, false));
+                // 将 ItemStack 转换为 StorageEntry（直接存储 ItemStack，避免注册表查找失败）
+                svm.entries.clear();
+                for (ItemStack stack : msg.getStacks()) {
+                    if (stack == null || stack.getItem() == null) continue;
+                    String displayName = stack.getDisplayName();
+                    svm.entries.add(new StorageEntry(stack, stack.stackSize, displayName, false));
+                }
+
+                // 更新已链接存储条目列表
+                svm.linkedEntries.clear();
+                svm.linkedStoragePositions.clear();
+                int linkedCount = msg.getLinkedCount();
+                int[] dimIds = msg.getLinkedDimIds();
+                int[] lx = msg.getLinkedX();
+                int[] ly = msg.getLinkedY();
+                int[] lz = msg.getLinkedZ();
+                byte[] modes = msg.getLinkedModes();
+                int[] priorities = msg.getLinkedPriorities();
+                for (int i = 0; i < linkedCount; i++) {
+                    svm.linkedEntries.add(
+                        new StorageViewModel.LinkedStorageEntry(
+                            dimIds[i],
+                            lx[i],
+                            ly[i],
+                            lz[i],
+                            modes[i],
+                            priorities[i]));
+                    svm.linkedStoragePositions.add(new com.rtsbuilding.rtsbuilding.util.BlockPos(lx[i], ly[i], lz[i]));
+                }
+                svm.linkedStorageCount = linkedCount;
+
+                // 更新 GUI 绑定数据
+                InteractionViewModel ivm = state.interaction;
+                ivm.guiBindings.clear();
+                int guiBindCount = msg.getGuiBindingCount();
+                int[] gx = msg.getGuiBindingX();
+                int[] gy = msg.getGuiBindingY();
+                int[] gz = msg.getGuiBindingZ();
+                int[] gDim = msg.getGuiBindingDimIds();
+                for (int i = 0; i < guiBindCount; i++) {
+                    ivm.guiBindings.add(new InteractionViewModel.GuiBindingSlot(gx[i], gy[i], gz[i], gDim[i]));
+                }
+
+                // 清除 dirty 标记
+                svm.dirty = false;
+
+                com.rtsbuilding.rtsbuilding.RtsbuildingMod.LOGGER.debug(
+                    "S2CRtsStoragePage: received page={}, totalPages={}, stacks={}, entries={}, linkedEntries={}",
+                    msg.getPage(),
+                    msg.getTotalPages(),
+                    msg.getStacks()
+                        .size(),
+                    svm.entries.size(),
+                    linkedCount);
+            } catch (Exception e) {
+                com.rtsbuilding.rtsbuilding.RtsbuildingMod.LOGGER
+                    .error("S2CRtsStoragePage: handler error: {}", e.toString());
             }
-
-            // 更新已链接存储条目列表
-            svm.linkedEntries.clear();
-            svm.linkedStoragePositions.clear();
-            int linkedCount = msg.getLinkedCount();
-            int[] dimIds = msg.getLinkedDimIds();
-            int[] lx = msg.getLinkedX();
-            int[] ly = msg.getLinkedY();
-            int[] lz = msg.getLinkedZ();
-            byte[] modes = msg.getLinkedModes();
-            int[] priorities = msg.getLinkedPriorities();
-            for (int i = 0; i < linkedCount; i++) {
-                svm.linkedEntries.add(
-                    new StorageViewModel.LinkedStorageEntry(dimIds[i], lx[i], ly[i], lz[i], modes[i], priorities[i]));
-                svm.linkedStoragePositions.add(new com.rtsbuilding.rtsbuilding.util.BlockPos(lx[i], ly[i], lz[i]));
-            }
-            svm.linkedStorageCount = linkedCount;
-
-            // 更新 GUI 绑定数据
-            InteractionViewModel ivm = state.interaction;
-            ivm.guiBindings.clear();
-            int guiBindCount = msg.getGuiBindingCount();
-            int[] gx = msg.getGuiBindingX();
-            int[] gy = msg.getGuiBindingY();
-            int[] gz = msg.getGuiBindingZ();
-            int[] gDim = msg.getGuiBindingDimIds();
-            for (int i = 0; i < guiBindCount; i++) {
-                ivm.guiBindings.add(new InteractionViewModel.GuiBindingSlot(gx[i], gy[i], gz[i], gDim[i]));
-            }
-
-            // 清除 dirty 标记
-            svm.dirty = false;
-
-            com.rtsbuilding.rtsbuilding.RtsbuildingMod.LOGGER.debug(
-                "S2CRtsStoragePage: received page={}, totalPages={}, stacks={}, entries={}, linkedEntries={}",
-                msg.getPage(),
-                msg.getTotalPages(),
-                msg.getStacks()
-                    .size(),
-                svm.entries.size(),
-                linkedCount);
 
             return null;
         }

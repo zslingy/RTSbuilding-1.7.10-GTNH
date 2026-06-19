@@ -565,6 +565,7 @@ public class RtsStorageSession {
             if (ref.dimension != currentDim) continue;
             if (!world.blockExists(ref.x, ref.y, ref.z)) {
                 world.getChunkFromChunkCoords(ref.x >> 4, ref.z >> 4);
+                if (!world.blockExists(ref.x, ref.y, ref.z)) continue;
             }
             TileEntity te = world.getTileEntity(ref.x, ref.y, ref.z);
             if (te instanceof IInventory) {
@@ -857,12 +858,25 @@ public class RtsStorageSession {
                 cmp = Comparator.comparingLong((StorageEntry e) -> e.count)
                     .reversed();
                 break;
+            case "mod_asc":
+                cmp = Comparator.comparing((StorageEntry e) -> extractModNamespace(e.itemId));
+                break;
+            case "mod_desc":
+                cmp = Comparator.comparing((StorageEntry e) -> extractModNamespace(e.itemId))
+                    .reversed();
+                break;
             case "name_asc":
             default:
                 cmp = Comparator.comparing(e -> e.itemId);
                 break;
         }
         entries.sort(cmp);
+    }
+
+    private static String extractModNamespace(String itemId) {
+        if (itemId == null) return "";
+        int colon = itemId.indexOf(':');
+        return colon > 0 ? itemId.substring(0, colon) : itemId;
     }
 
     // ======== 数据类 ========

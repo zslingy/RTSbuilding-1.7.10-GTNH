@@ -82,7 +82,6 @@ public class C2SRtsLinkStorageMessage implements IMessage {
                 .linkStorage(player, m.getPosX(), m.getPosY(), m.getPosZ(), m.getLinkMode());
 
             if (success) {
-                // 发送链接状态（简单布尔值，linkedEntries 由 sendStoragePage 携带）
                 S2CRtsLinkStorageStatusMessage response = new S2CRtsLinkStorageStatusMessage(
                     m.getPosX(),
                     m.getPosY(),
@@ -90,7 +89,6 @@ public class C2SRtsLinkStorageMessage implements IMessage {
                     true);
                 RtsNetworkManager.NETWORK.sendTo(response, player);
 
-                // 立即发送存储页面数据给客户端（携带 items + linkedEntries）
                 RtsStorageManager.sendStoragePage(player, 0, 0);
             } else {
                 S2CRtsLinkStorageStatusMessage response = new S2CRtsLinkStorageStatusMessage(

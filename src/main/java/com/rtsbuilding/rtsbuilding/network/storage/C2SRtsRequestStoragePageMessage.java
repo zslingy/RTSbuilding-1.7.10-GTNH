@@ -72,7 +72,7 @@ public class C2SRtsRequestStoragePageMessage implements IMessage {
             EntityPlayerMP player = ctx.getServerHandler().playerEntity;
             if (player == null) return null;
 
-            RtsStorageManager.sendStoragePage(player, m.getPage(), m.getWindowId());
+            RtsStorageManager.sendStoragePage(player, m.getPage(), m.getWindowId(), m.getSortMode());
             return null;
         }
     }

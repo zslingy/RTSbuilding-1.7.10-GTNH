@@ -40,9 +40,9 @@ public class StorageViewModel {
     public String sortMode = "name_asc"; // name_asc, name_desc, count_asc, count_desc
 
     // ---- 面板高度（可调） ----
-    public static final int MIN_PANEL_H = 36;
-    public static final int DEFAULT_PANEL_H = 55;
-    public static final int MAX_PANEL_H = 160;
+    public static final int MIN_PANEL_H = 72;
+    public static final int DEFAULT_PANEL_H = 110;
+    public static final int MAX_PANEL_H = 320;
     public int panelHeight = DEFAULT_PANEL_H;
 
     // ---- 分类 ----

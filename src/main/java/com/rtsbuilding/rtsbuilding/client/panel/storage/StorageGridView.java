@@ -32,7 +32,7 @@ public class StorageGridView implements IRtsPanel {
     private static final String PANEL_NAME = "storage_grid";
     private static final int COLS = 20;
     private static final int ROWS_COUNT = 2;
-    private static final int SLOT_SIZE = 14; // Issue 5: 与快捷栏格子大小一致
+    private static final int SLOT_SIZE = 18;
     private static final int SLOT_SPACING = 0;
 
     /** 1.7.10 遗留物品名称映射（客户端也需要，用于 resolveStack） */

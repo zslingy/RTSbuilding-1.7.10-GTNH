@@ -19,16 +19,33 @@ public class C2SRtsMineMessage implements IMessage {
     private ItemStack toolPrototype;
     private boolean allowPlacedBlockRecovery;
     private boolean ultimine;
+    private int ultimineLimit;
 
     public C2SRtsMineMessage() {}
 
     public C2SRtsMineMessage(int posX, int posY, int posZ, byte face, boolean start, byte toolSlot, String toolItemId,
         ItemStack toolPrototype, boolean allowPlacedBlockRecovery) {
-        this(posX, posY, posZ, face, start, toolSlot, toolItemId, toolPrototype, allowPlacedBlockRecovery, false);
+        this(posX, posY, posZ, face, start, toolSlot, toolItemId, toolPrototype, allowPlacedBlockRecovery, false, 64);
     }
 
     public C2SRtsMineMessage(int posX, int posY, int posZ, byte face, boolean start, byte toolSlot, String toolItemId,
         ItemStack toolPrototype, boolean allowPlacedBlockRecovery, boolean ultimine) {
+        this(
+            posX,
+            posY,
+            posZ,
+            face,
+            start,
+            toolSlot,
+            toolItemId,
+            toolPrototype,
+            allowPlacedBlockRecovery,
+            ultimine,
+            64);
+    }
+
+    public C2SRtsMineMessage(int posX, int posY, int posZ, byte face, boolean start, byte toolSlot, String toolItemId,
+        ItemStack toolPrototype, boolean allowPlacedBlockRecovery, boolean ultimine, int ultimineLimit) {
         this.posX = posX;
         this.posY = posY;
         this.posZ = posZ;
@@ -39,6 +56,7 @@ public class C2SRtsMineMessage implements IMessage {
         this.toolPrototype = toolPrototype != null ? toolPrototype.copy() : null;
         this.allowPlacedBlockRecovery = allowPlacedBlockRecovery;
         this.ultimine = ultimine;
+        this.ultimineLimit = Math.max(1, Math.min(ultimineLimit, 256));
     }
 
     @Override
@@ -55,6 +73,7 @@ public class C2SRtsMineMessage implements IMessage {
         if (hasTool) ByteBufUtils.writeItemStack(buf, toolPrototype);
         buf.writeBoolean(allowPlacedBlockRecovery);
         buf.writeBoolean(ultimine);
+        buf.writeInt(ultimineLimit);
     }
 
     @Override
@@ -69,6 +88,7 @@ public class C2SRtsMineMessage implements IMessage {
         toolPrototype = buf.readBoolean() ? ByteBufUtils.readItemStack(buf) : null;
         allowPlacedBlockRecovery = buf.readBoolean();
         ultimine = buf.readBoolean();
+        ultimineLimit = buf.readInt();
     }
 
     private static void writeUtf(ByteBuf b, String s, int max) {
@@ -126,6 +146,10 @@ public class C2SRtsMineMessage implements IMessage {
         return ultimine;
     }
 
+    public int getUltimineLimit() {
+        return ultimineLimit;
+    }
+
     public static class Handler implements IMessageHandler<C2SRtsMineMessage, IMessage> {
 
         @Override
@@ -152,7 +176,8 @@ public class C2SRtsMineMessage implements IMessage {
                     msg.getToolItemId(),
                     tool,
                     msg.isAllowPlacedBlockRecovery(),
-                    msg.isUltimine());
+                    msg.isUltimine(),
+                    msg.getUltimineLimit());
             } else {
                 com.rtsbuilding.rtsbuilding.server.RtsMineManager.abortMining(player);
             }

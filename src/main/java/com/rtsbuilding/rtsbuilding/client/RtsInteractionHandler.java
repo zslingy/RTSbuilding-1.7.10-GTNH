@@ -254,7 +254,8 @@ public class RtsInteractionHandler {
                 toolItemId,
                 toolPrototype,
                 false, // allowPlacedBlockRecovery
-                true); // ultimine = true
+                true, // ultimine = true
+                state.interaction.ultimineLimit);
             RtsNetworkManager.NETWORK.sendToServer(msg);
         } else {
             // 普通单方块挖掘

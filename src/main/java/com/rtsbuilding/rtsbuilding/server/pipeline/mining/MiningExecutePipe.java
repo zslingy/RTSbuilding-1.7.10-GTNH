@@ -22,6 +22,8 @@ public final class MiningExecutePipe implements PipelinePipe<PipelineContext> {
     public static final TypedKey<Boolean> KEY_ALLOW_PLACED_RECOVERY = new TypedKey<Boolean>(
         "allowPlacedBlockRecovery",
         Boolean.class);
+    public static final TypedKey<Boolean> KEY_ULTIMINE = new TypedKey<Boolean>("ultimine", Boolean.class);
+    public static final TypedKey<Integer> KEY_ULTIMINE_LIMIT = new TypedKey<Integer>("ultimineLimit", Integer.class);
 
     @Override
     public PipelineResult execute(PipelineContext ctx) {
@@ -30,6 +32,8 @@ public final class MiningExecutePipe implements PipelinePipe<PipelineContext> {
         Byte face = ctx.getArg(KEY_FACE);
         Byte slot = ctx.getArg(KEY_TOOL_SLOT);
         Boolean recovery = ctx.getArg(KEY_ALLOW_PLACED_RECOVERY);
+        Boolean ultimine = ctx.getArg(KEY_ULTIMINE);
+        Integer ultimineLimit = ctx.getArg(KEY_ULTIMINE_LIMIT);
         RtsMineManager.startMiningDirect(
             ctx.player(),
             x.intValue(),
@@ -40,7 +44,8 @@ public final class MiningExecutePipe implements PipelinePipe<PipelineContext> {
             ctx.getArg(KEY_TOOL_ITEM_ID),
             ctx.getArg(KEY_TOOL_PROTOTYPE),
             recovery != null && recovery.booleanValue(),
-            false);
+            ultimine != null && ultimine.booleanValue(),
+            ultimineLimit != null ? ultimineLimit.intValue() : 64);
         return PipelineResult.success();
     }
 }

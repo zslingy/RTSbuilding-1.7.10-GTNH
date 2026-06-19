@@ -9,18 +9,16 @@ import com.rtsbuilding.rtsbuilding.client.RtsClientState;
 import com.rtsbuilding.rtsbuilding.client.panel.RtsWindowPanel;
 
 /**
- * 连锁挖掘窗口面板 — 进度显示、限制输入+滑块、CHAIN/AREA 模式切换、形状选择。
- * 对齐原版 UltiminePanel，继承 RtsWindowPanel 获得窗口框架能力。
+ * 连锁挖掘窗口面板 — 进度显示、上限滑块。
+ * 范围破坏(area destroy)形状选择已移至 QuickBuildPanel。
  */
 public class UltiminePanel extends RtsWindowPanel {
 
     private static final int PANEL_W = 180;
-    private static final int PANEL_H = 184;
+    private static final int PANEL_H = 170;
     private static final int MIN_LIMIT = 1;
     private static final int MAX_LIMIT = 256;
     private static final int ROW_H = 14;
-
-    private static final String[] AREA_SHAPES = { "BLOCK", "LINE", "SQUARE", "WALL", "CIRCLE", "BOX" };
 
     private final RtsClientState state;
     private boolean sliderDragging;
@@ -51,7 +49,7 @@ public class UltiminePanel extends RtsWindowPanel {
 
     @Override
     protected boolean canShowWindow() {
-        return state.interaction.ultimineActive;
+        return state.interaction.ultimineActive && !state.interaction.areaDestroyActive;
     }
 
     @Override
@@ -80,7 +78,6 @@ public class UltiminePanel extends RtsWindowPanel {
         }
 
         fr.drawString(progressLabel, x, y, progressColor);
-
         y += ROW_H + 2;
 
         int barW = cw - 8;
@@ -93,7 +90,7 @@ public class UltiminePanel extends RtsWindowPanel {
 
         y += 16;
 
-        // === 限制值 ===
+        // === 连锁上限滑块 ===
         int limit = ivm.ultimineLimit;
         fr.drawString(
             StatCollector.translateToLocalFormatted("screen.rtsbuilding.ultimine.limit", limit),
@@ -102,7 +99,6 @@ public class UltiminePanel extends RtsWindowPanel {
             0xFFCCCC44);
         y += ROW_H + 2;
 
-        // === 滑块 ===
         int trackX = x;
         int trackW = cw - 8;
         int knobX = trackX + (int) Math.round((limit - MIN_LIMIT) / (double) (MAX_LIMIT - MIN_LIMIT) * trackW);
@@ -122,51 +118,6 @@ public class UltiminePanel extends RtsWindowPanel {
             trackX + trackW - fr.getStringWidth(String.valueOf(MAX_LIMIT)),
             y + 9,
             0xFFB0C0D0);
-
-        y += ROW_H + 16;
-
-        // === 模式切换 CHAIN / AREA ===
-        boolean chainMode = !ivm.areaDestroyActive;
-        int toggleW = (cw - 12) / 2;
-        renderModeBtn(
-            screen,
-            x,
-            y,
-            toggleW,
-            StatCollector.translateToLocal("screen.rtsbuilding.ultimine.mode_chain"),
-            chainMode,
-            mouseX,
-            mouseY);
-        renderModeBtn(
-            screen,
-            x + toggleW + 4,
-            y,
-            toggleW,
-            StatCollector.translateToLocal("screen.rtsbuilding.ultimine.mode_area"),
-            !chainMode,
-            mouseX,
-            mouseY);
-
-        y += ROW_H + 8;
-
-        // === AREA 模式: 形状选择 ===
-        if (!chainMode) {
-            fr.drawString(
-                StatCollector.translateToLocal("screen.rtsbuilding.quick_build.shape") + ":",
-                x,
-                y,
-                0xFFA0B0C0);
-            y += ROW_H;
-            int shapeW = (cw - 12) / 3;
-            for (int i = 0; i < AREA_SHAPES.length; i++) {
-                int col = i % 3;
-                int row = i / 3;
-                int sx = x + col * (shapeW + 2);
-                int sy = y + row * (ROW_H + 2);
-                boolean active = AREA_SHAPES[i].equalsIgnoreCase(ivm.quickBuildShape);
-                renderShapeBtn(screen, sx, sy, shapeW, AREA_SHAPES[i], active, mouseX, mouseY);
-            }
-        }
     }
 
     @Override
@@ -187,34 +138,6 @@ public class UltiminePanel extends RtsWindowPanel {
             sliderDragging = true;
             updateLimitFromSlider(mouseX, ivm);
             return;
-        }
-
-        // 模式切换
-        int modeY = trackY + ROW_H + 16;
-        int toggleW = (cw - 12) / 2;
-        if (checkRect(x, modeY, toggleW, ROW_H, mouseX, mouseY)) {
-            ivm.areaDestroyActive = false;
-            return;
-        }
-        if (checkRect(x + toggleW + 4, modeY, toggleW, ROW_H, mouseX, mouseY)) {
-            ivm.areaDestroyActive = true;
-            return;
-        }
-
-        // AREA 模式: 形状按钮
-        if (ivm.areaDestroyActive) {
-            int shapeY = modeY + ROW_H + 8 + ROW_H;
-            int shapeW = (cw - 12) / 3;
-            for (int i = 0; i < AREA_SHAPES.length; i++) {
-                int col = i % 3;
-                int row = i / 3;
-                int sx = x + col * (shapeW + 2);
-                int sy = shapeY + row * (ROW_H + 2);
-                if (checkRect(sx, sy, shapeW, ROW_H, mouseX, mouseY)) {
-                    ivm.quickBuildShape = AREA_SHAPES[i].toLowerCase();
-                    return;
-                }
-            }
         }
     }
 
@@ -243,33 +166,5 @@ public class UltiminePanel extends RtsWindowPanel {
 
     private boolean checkRect(int rx, int ry, int rw, int rh, int mx, int my) {
         return mx >= rx && mx < rx + rw && my >= ry && my < ry + rh;
-    }
-
-    private void renderModeBtn(GuiScreen screen, int bx, int by, int bw, String label, boolean active, int mx, int my) {
-        FontRenderer fr = screen.mc.fontRenderer;
-        boolean hover = checkRect(bx, by, bw, ROW_H, mx, my);
-        int bg = active ? 0xFF28553E : (hover ? 0xFF2A3A4A : 0xFF1A2330);
-        int border = active ? 0xFF5FE36C : (hover ? 0xFF647B92 : 0xFF314055);
-        int textColor = active ? 0xFFD8FFE0 : (hover ? 0xFFD0D8E0 : 0xFF8A9AAA);
-
-        drawRect(bx, by, bx + bw, by + ROW_H, border);
-        drawRect(bx + 1, by + 1, bx + bw - 1, by + ROW_H - 1, bg);
-        fr.drawString(label, bx + (bw - fr.getStringWidth(label)) / 2, by + 2, textColor);
-    }
-
-    private void renderShapeBtn(GuiScreen screen, int bx, int by, int bw, String label, boolean active, int mx,
-        int my) {
-        FontRenderer fr = screen.mc.fontRenderer;
-        boolean hover = checkRect(bx, by, bw, ROW_H, mx, my);
-        int bg = active ? 0xFF28553E : (hover ? 0xFF2A3A4A : 0xFF1A2330);
-        int border = active ? 0xFF5FE36C : (hover ? 0xFF647B92 : 0xFF314055);
-        int textColor = active ? 0xFFD8FFE0 : (hover ? 0xFFD0D8E0 : 0xFF8A9AAA);
-
-        drawRect(bx, by, bx + bw, by + ROW_H, border);
-        drawRect(bx + 1, by + 1, bx + bw - 1, by + ROW_H - 1, bg);
-        // Issue 3: 使用翻译键显示形状名称
-        String displayName = StatCollector.translateToLocal("screen.rtsbuilding.shape." + label.toLowerCase());
-        if (displayName == null || displayName.startsWith("screen.")) displayName = label;
-        fr.drawString(displayName, bx + 2, by + 2, textColor);
     }
 }

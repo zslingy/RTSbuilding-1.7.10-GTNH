@@ -986,6 +986,10 @@ public final class RtsStorageManager {
 
     // ======== 存储页面构建与发送 ========
 
+    public static void sendStoragePage(EntityPlayerMP player, int page, int windowId) {
+        sendStoragePage(player, page, windowId, "name_asc");
+    }
+
     /**
      * 构建存储页面数据并发送给客户端。
      * 供 C2SRtsRequestStoragePageMessage 和 C2SRtsLinkStorageMessage 共用。
@@ -993,8 +997,9 @@ public final class RtsStorageManager {
      * @param player   目标玩家
      * @param page     页码 (0-based)
      * @param windowId 窗口 ID
+     * @param sortMode 排序模式
      */
-    public static void sendStoragePage(EntityPlayerMP player, int page, int windowId) {
+    public static void sendStoragePage(EntityPlayerMP player, int page, int windowId, String sortMode) {
         if (player == null) return;
 
         RtsStorageSession session = getSession(player);
@@ -1006,7 +1011,7 @@ public final class RtsStorageManager {
         }
         session.scanPlayerInventory(player);
 
-        RtsStorageSession.PageResult result = session.queryPage("name_asc", page, 88);
+        RtsStorageSession.PageResult result = session.queryPage(sortMode != null ? sortMode : "name_asc", page, 88);
         java.util.List<net.minecraft.item.ItemStack> stacks = session.toItemStacks(result.items);
 
         RtsbuildingMod.LOGGER.debug(

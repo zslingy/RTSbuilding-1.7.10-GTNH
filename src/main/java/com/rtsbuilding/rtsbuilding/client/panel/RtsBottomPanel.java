@@ -51,20 +51,20 @@ public class RtsBottomPanel implements IRtsPanel {
     public static final String PANEL_NAME = "bottom_panel";
 
     // ── 布局常量 ──
-    static final int PANEL_PADDING = 6;
-    static final int HEADER_H = 14;
+    static final int PANEL_PADDING = 8;
+    static final int HEADER_H = 18;
     static final int SORT_COL_W = 44;
-    static final int CATEGORY_W = 80;
+    static final int CATEGORY_W = 124;
     static final int CATEGORY_GAP = 5;
-    static final int SLOT = 14; // Issue 5: 与快捷栏格子大小一致
-    static final int HOTBAR_SLOT = 14;
-    static final int HOTBAR_PITCH = 15;
-    static final int TOOL_AREA_H = 14;
-    static final int CRAFT_PANEL_W = 95;
-    static final int CRAFT_PANEL_GAP = 5;
-    static final int STORAGE_RECENT_GAP = 5;
+    static final int SLOT = 18;
+    static final int HOTBAR_SLOT = 18;
+    static final int HOTBAR_PITCH = 20;
+    static final int TOOL_AREA_H = 18;
+    static final int CRAFT_PANEL_W = 120;
+    static final int CRAFT_PANEL_GAP = 6;
+    static final int STORAGE_RECENT_GAP = 6;
     static final int FLUID_COLS = 2;
-    static final int ICON_SCALE = 0; // Issue 5: 物品图标缩放标记（0.75x通过GL实现）
+    static final int ICON_SCALE = 0;
 
     // 合成底座常量
     private static final int CRAFT_DOCK_C_SIZE = 14;

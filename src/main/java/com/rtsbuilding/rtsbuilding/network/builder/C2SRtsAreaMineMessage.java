@@ -142,6 +142,51 @@ public class C2SRtsAreaMineMessage implements IMessage {
             EntityPlayerMP player = ctx.getServerHandler().playerEntity;
             if (player == null) return null;
 
+            if (com.rtsbuilding.rtsbuilding.server.pipeline.core.PipelineRegistry
+                .has(com.rtsbuilding.rtsbuilding.server.workflow.model.RtsWorkflowType.AREA_MINE)) {
+                java.util.Map<String, Object> args = new java.util.HashMap<String, Object>();
+                args.put(
+                    com.rtsbuilding.rtsbuilding.server.pipeline.mining.AreaMineExecutePipe.KEY_MIN_X.name(),
+                    Integer.valueOf(msg.minX));
+                args.put(
+                    com.rtsbuilding.rtsbuilding.server.pipeline.mining.AreaMineExecutePipe.KEY_MAX_X.name(),
+                    Integer.valueOf(msg.maxX));
+                args.put(
+                    com.rtsbuilding.rtsbuilding.server.pipeline.mining.AreaMineExecutePipe.KEY_MIN_Y.name(),
+                    Integer.valueOf(msg.minY));
+                args.put(
+                    com.rtsbuilding.rtsbuilding.server.pipeline.mining.AreaMineExecutePipe.KEY_MAX_Y.name(),
+                    Integer.valueOf(msg.maxY));
+                args.put(
+                    com.rtsbuilding.rtsbuilding.server.pipeline.mining.AreaMineExecutePipe.KEY_MIN_Z.name(),
+                    Integer.valueOf(msg.minZ));
+                args.put(
+                    com.rtsbuilding.rtsbuilding.server.pipeline.mining.AreaMineExecutePipe.KEY_MAX_Z.name(),
+                    Integer.valueOf(msg.maxZ));
+                args.put(
+                    com.rtsbuilding.rtsbuilding.server.pipeline.mining.MiningExecutePipe.KEY_TOOL_SLOT.name(),
+                    Byte.valueOf(msg.toolSlot));
+                args.put(
+                    com.rtsbuilding.rtsbuilding.server.pipeline.mining.MiningExecutePipe.KEY_TOOL_ITEM_ID.name(),
+                    msg.toolItemId);
+                args.put(
+                    com.rtsbuilding.rtsbuilding.server.pipeline.mining.MiningExecutePipe.KEY_TOOL_PROTOTYPE.name(),
+                    msg.toolPrototype);
+                args.put(
+                    com.rtsbuilding.rtsbuilding.server.pipeline.mining.AreaMineExecutePipe.KEY_SHAPE_TYPE.name(),
+                    Byte.valueOf(msg.shapeType));
+                args.put(
+                    com.rtsbuilding.rtsbuilding.server.pipeline.mining.AreaMineExecutePipe.KEY_FILL_TYPE.name(),
+                    Byte.valueOf(msg.fillType));
+                @SuppressWarnings("unchecked")
+                com.rtsbuilding.rtsbuilding.server.pipeline.core.WorkflowPipeline<com.rtsbuilding.rtsbuilding.server.pipeline.core.PipelineContext> pipeline = (com.rtsbuilding.rtsbuilding.server.pipeline.core.WorkflowPipeline<com.rtsbuilding.rtsbuilding.server.pipeline.core.PipelineContext>) com.rtsbuilding.rtsbuilding.server.pipeline.core.PipelineRegistry
+                    .get(com.rtsbuilding.rtsbuilding.server.workflow.model.RtsWorkflowType.AREA_MINE);
+                com.rtsbuilding.rtsbuilding.server.pipeline.core.PipelineResult result = pipeline
+                    .execute(new com.rtsbuilding.rtsbuilding.server.pipeline.core.PipelineContext(player, args));
+                if (!(result instanceof com.rtsbuilding.rtsbuilding.server.pipeline.core.PipelineResult.Failure))
+                    return null;
+            }
+
             // RTS 模式检查
             if (!RtsCameraManager.isActive(player)) return null;
 

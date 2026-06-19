@@ -3,11 +3,13 @@ package com.rtsbuilding.rtsbuilding.client.panel.quickbuild;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.FontRenderer;
 import net.minecraft.client.gui.GuiScreen;
+import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.StatCollector;
 
 import com.rtsbuilding.rtsbuilding.client.InteractionViewModel;
 import com.rtsbuilding.rtsbuilding.client.RtsClientState;
 import com.rtsbuilding.rtsbuilding.client.panel.RtsWindowPanel;
+import com.rtsbuilding.rtsbuilding.client.widget.WindowButton;
 
 /**
  * 快速建造窗口面板 — BUILD/DESTROY 模式切换、形状选择、填充模式、尺寸旋转控制。
@@ -18,6 +20,7 @@ public class QuickBuildPanel extends RtsWindowPanel {
     private static final int PANEL_W = 180;
     private static final int PANEL_H = 190;
     private static final int ROW_H = 14;
+    private static final int SHAPE_ICON_SIZE = 12;
     private static final int BTN_SPACING = 2;
 
     private static final String[] SHAPES = { "BLOCK", "LINE", "SQUARE", "WALL", "CIRCLE", "BOX" };
@@ -76,7 +79,7 @@ public class QuickBuildPanel extends RtsWindowPanel {
             int by = y + row * (ROW_H + BTN_SPACING);
             boolean active = SHAPES[i].equalsIgnoreCase(ivm.quickBuildShape);
             String displayName = StatCollector.translateToLocal("screen.rtsbuilding.shape." + SHAPES[i].toLowerCase());
-            renderTextBtn(screen, bx, by, cw / 2 - 4, displayName, active, mouseX, mouseY, bi++);
+            renderShapeBtn(screen, bx, by, cw / 2 - 4, SHAPES[i], displayName, active, mouseX, mouseY, bi++);
         }
 
         y += ((SHAPES.length + 1) / 2) * (ROW_H + BTN_SPACING) + 4;
@@ -222,6 +225,20 @@ public class QuickBuildPanel extends RtsWindowPanel {
         boolean hover = checkRect(bx, by, bw, ROW_H, mx, my);
         int color = active ? 0xFFCCCC44 : (hover ? 0xFF888888 : 0xFF666666);
         fr.drawString(label, bx + 2, by + 1, color);
+    }
+
+    private void renderShapeBtn(GuiScreen screen, int bx, int by, int bw, String shape, String label, boolean active,
+        int mx, int my, int idx) {
+        FontRenderer fr = screen.mc.fontRenderer;
+        boolean hover = checkRect(bx, by, bw, ROW_H, mx, my);
+        int color = active ? 0xFFCCCC44 : (hover ? 0xFF888888 : 0xFF666666);
+        int iconY = by + (ROW_H - SHAPE_ICON_SIZE) / 2;
+        WindowButton.drawTexture(screen.mc, getShapeTexture(shape), bx + 1, iconY, SHAPE_ICON_SIZE, SHAPE_ICON_SIZE);
+        fr.drawString(label, bx + SHAPE_ICON_SIZE + 4, by + 1, color);
+    }
+
+    private static ResourceLocation getShapeTexture(String shape) {
+        return new ResourceLocation("rtsbuilding", "textures/gui/quickbuild/" + shape.toLowerCase() + "_block.png");
     }
 
     private void renderSmallStepper(GuiScreen screen, int bx, int by, int bw, String label, int val, int mx, int my,

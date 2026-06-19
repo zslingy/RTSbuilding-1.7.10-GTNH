@@ -12,7 +12,7 @@ import cpw.mods.fml.common.eventhandler.SubscribeEvent;
 
 /**
  * RTS 世界叠加层调度器 — 替代原 RtsVisualOverlayRenderer。
- * 注册到 Forge RenderWorldLastEvent，调度 4 个子渲染器。
+ * 注册到 Forge RenderWorldLastEvent，调度 6 个子渲染器（含第八阶段新增）。
  */
 public class RtsWorldRenderer {
 
@@ -85,6 +85,8 @@ public class RtsWorldRenderer {
         if (!ghost.blocks.isEmpty()) {
             shapeGhostRenderer.renderShapesAbs(ghost);
         }
+
+        AnimationRenderer.render(event.partialTicks);
 
         GL11.glEnable(GL11.GL_LIGHTING);
         GL11.glEnable(GL11.GL_TEXTURE_2D);

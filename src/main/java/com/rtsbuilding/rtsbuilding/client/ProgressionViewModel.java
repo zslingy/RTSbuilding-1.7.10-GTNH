@@ -30,6 +30,11 @@ public class ProgressionViewModel {
     // ---- 同步 ----
     public boolean stateDirty = true;
 
+    public byte questDetectPhase = -1;
+    public int questDetectScanned = 0;
+    public int questDetectTotal = 0;
+    public int questDetectCompleted = 0;
+
     public boolean isNodeUnlocked(String nodePath) {
         Boolean unlocked = unlockedNodes.get(nodePath);
         return unlocked != null && unlocked;

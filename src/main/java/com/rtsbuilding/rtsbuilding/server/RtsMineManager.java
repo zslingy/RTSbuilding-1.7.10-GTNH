@@ -2,6 +2,7 @@ package com.rtsbuilding.rtsbuilding.server;
 
 import java.util.ArrayDeque;
 import java.util.Deque;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -24,9 +25,16 @@ import com.rtsbuilding.rtsbuilding.network.RtsNetworkManager;
 import com.rtsbuilding.rtsbuilding.network.builder.S2CRtsMineProgressMessage;
 import com.rtsbuilding.rtsbuilding.network.builder.S2CRtsUltimineProgressMessage;
 import com.rtsbuilding.rtsbuilding.progression.RtsFeature;
+import com.rtsbuilding.rtsbuilding.server.pipeline.core.PipelineContext;
+import com.rtsbuilding.rtsbuilding.server.pipeline.core.PipelineRegistry;
+import com.rtsbuilding.rtsbuilding.server.pipeline.core.PipelineResult;
+import com.rtsbuilding.rtsbuilding.server.pipeline.core.WorkflowPipeline;
+import com.rtsbuilding.rtsbuilding.server.pipeline.mining.MiningExecutePipe;
+import com.rtsbuilding.rtsbuilding.server.pipeline.mining.UltimineExecutePipe;
 import com.rtsbuilding.rtsbuilding.server.policy.RtsBreakPolicy;
 import com.rtsbuilding.rtsbuilding.server.progression.RtsProgressionManager;
 import com.rtsbuilding.rtsbuilding.server.storage.RtsStorageSession;
+import com.rtsbuilding.rtsbuilding.server.workflow.model.RtsWorkflowType;
 import com.rtsbuilding.rtsbuilding.util.RtsUltimineCollector;
 
 import cpw.mods.fml.common.eventhandler.SubscribeEvent;
@@ -74,6 +82,38 @@ public final class RtsMineManager {
     }
 
     public static void startMining(EntityPlayerMP player, int x, int y, int z, byte face, byte toolSlot,
+        String toolItemId, ItemStack toolPrototype, boolean allowPlacedBlockRecovery, boolean ultimine) {
+        if (PipelineRegistry.has(RtsWorkflowType.MINE_SINGLE)) {
+            Map<String, Object> args = new HashMap<String, Object>();
+            args.put(MiningExecutePipe.KEY_X.name(), Integer.valueOf(x));
+            args.put(MiningExecutePipe.KEY_Y.name(), Integer.valueOf(y));
+            args.put(MiningExecutePipe.KEY_Z.name(), Integer.valueOf(z));
+            args.put(MiningExecutePipe.KEY_FACE.name(), Byte.valueOf(face));
+            args.put(MiningExecutePipe.KEY_TOOL_SLOT.name(), Byte.valueOf(toolSlot));
+            args.put(MiningExecutePipe.KEY_TOOL_ITEM_ID.name(), toolItemId);
+            args.put(MiningExecutePipe.KEY_TOOL_PROTOTYPE.name(), toolPrototype);
+            args.put(MiningExecutePipe.KEY_ALLOW_PLACED_RECOVERY.name(), Boolean.valueOf(allowPlacedBlockRecovery));
+            @SuppressWarnings("unchecked")
+            WorkflowPipeline<PipelineContext> pipeline = (WorkflowPipeline<PipelineContext>) PipelineRegistry
+                .get(RtsWorkflowType.MINE_SINGLE);
+            PipelineResult result = pipeline.execute(new PipelineContext(player, args));
+            if (!(result instanceof PipelineResult.Failure)) return;
+            RtsbuildingMod.LOGGER.warn("RtsMineManager: pipeline startMining failed, falling back to direct execution");
+        }
+        startMiningDirect(
+            player,
+            x,
+            y,
+            z,
+            face,
+            toolSlot,
+            toolItemId,
+            toolPrototype,
+            allowPlacedBlockRecovery,
+            ultimine);
+    }
+
+    public static void startMiningDirect(EntityPlayerMP player, int x, int y, int z, byte face, byte toolSlot,
         String toolItemId, ItemStack toolPrototype, boolean allowPlacedBlockRecovery, boolean ultimine) {
         if (player == null || player.worldObj == null) return;
         UUID uuid = player.getUniqueID();
@@ -152,6 +192,30 @@ public final class RtsMineManager {
      */
     public static void startUltimine(EntityPlayerMP player, int seedX, int seedY, int seedZ, byte face, int toolSlot,
         String toolItemId, ItemStack toolPrototype, int limit, byte mode) {
+        if (PipelineRegistry.has(RtsWorkflowType.ULTIMINE)) {
+            Map<String, Object> args = new HashMap<String, Object>();
+            args.put(MiningExecutePipe.KEY_X.name(), Integer.valueOf(seedX));
+            args.put(MiningExecutePipe.KEY_Y.name(), Integer.valueOf(seedY));
+            args.put(MiningExecutePipe.KEY_Z.name(), Integer.valueOf(seedZ));
+            args.put(MiningExecutePipe.KEY_FACE.name(), Byte.valueOf(face));
+            args.put(MiningExecutePipe.KEY_TOOL_SLOT.name(), Byte.valueOf((byte) toolSlot));
+            args.put(MiningExecutePipe.KEY_TOOL_ITEM_ID.name(), toolItemId);
+            args.put(MiningExecutePipe.KEY_TOOL_PROTOTYPE.name(), toolPrototype);
+            args.put(UltimineExecutePipe.KEY_LIMIT.name(), Integer.valueOf(limit));
+            args.put(UltimineExecutePipe.KEY_MODE.name(), Byte.valueOf(mode));
+            @SuppressWarnings("unchecked")
+            WorkflowPipeline<PipelineContext> pipeline = (WorkflowPipeline<PipelineContext>) PipelineRegistry
+                .get(RtsWorkflowType.ULTIMINE);
+            PipelineResult result = pipeline.execute(new PipelineContext(player, args));
+            if (!(result instanceof PipelineResult.Failure)) return;
+            RtsbuildingMod.LOGGER
+                .warn("RtsMineManager: pipeline startUltimine failed, falling back to direct execution");
+        }
+        startUltimineDirect(player, seedX, seedY, seedZ, face, toolSlot, toolItemId, toolPrototype, limit, mode);
+    }
+
+    public static void startUltimineDirect(EntityPlayerMP player, int seedX, int seedY, int seedZ, byte face,
+        int toolSlot, String toolItemId, ItemStack toolPrototype, int limit, byte mode) {
         if (player == null || player.worldObj == null) return;
         UUID uuid = player.getUniqueID();
 
@@ -219,8 +283,7 @@ public final class RtsMineManager {
     /**
      * 查找玩家背包中的工具。
      */
-    private static ItemStack findTool(EntityPlayerMP player, int preferredSlot, String toolItemId,
-        ItemStack prototype) {
+    public static ItemStack findTool(EntityPlayerMP player, int preferredSlot, String toolItemId, ItemStack prototype) {
         if (preferredSlot >= 0 && preferredSlot < 9) {
             ItemStack hotbar = player.inventory.getStackInSlot(preferredSlot);
             if (hotbar != null && matchesTool(hotbar, toolItemId, prototype)) return hotbar;
@@ -485,6 +548,45 @@ public final class RtsMineManager {
             }
             RtsbuildingMod.LOGGER
                 .warn("RtsMineManager: ultimine breakBlock failed at ({},{},{}): {}", x, y, z, e.getMessage());
+        }
+    }
+
+    /**
+     * 直接破坏单个方块（供管线系统分帧调用）。
+     */
+    public static boolean breakBlockDirect(EntityPlayerMP player, int x, int y, int z, ItemStack tool) {
+        if (player == null || player.worldObj == null) return false;
+        World world = player.worldObj;
+        Block block = world.getBlock(x, y, z);
+        if (block == null || block == Blocks.air || block.isAir(world, x, y, z)) return false;
+
+        int metadata = world.getBlockMetadata(x, y, z);
+        BlockEvent.BreakEvent breakEvent = new BlockEvent.BreakEvent(x, y, z, world, block, metadata, player);
+        if (MinecraftForge.EVENT_BUS.post(breakEvent)) return false;
+
+        try {
+            ItemStack prevHeld = player.getCurrentEquippedItem();
+            if (tool != null) {
+                player.inventory.mainInventory[player.inventory.currentItem] = tool;
+            }
+            boolean removed = player.theItemInWorldManager.tryHarvestBlock(x, y, z);
+            if (prevHeld != null) {
+                player.inventory.mainInventory[player.inventory.currentItem] = prevHeld;
+            }
+            player.inventoryContainer.detectAndSendChanges();
+
+            if (removed) {
+                world.playAuxSFX(2001, x, y, z, Block.getIdFromBlock(block) + (metadata << 12));
+            }
+            return removed;
+        } catch (Exception e) {
+            boolean removed = world.setBlockToAir(x, y, z);
+            if (removed && !player.capabilities.isCreativeMode) {
+                block.dropBlockAsItem(world, x, y, z, metadata, 0);
+            }
+            RtsbuildingMod.LOGGER
+                .warn("RtsMineManager.breakBlockDirect: failed at ({},{},{}): {}", x, y, z, e.getMessage());
+            return true;
         }
     }
 

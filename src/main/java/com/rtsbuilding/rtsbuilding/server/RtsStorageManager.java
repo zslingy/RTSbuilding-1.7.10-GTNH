@@ -4,9 +4,12 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
+import net.minecraft.block.Block;
 import net.minecraft.entity.item.EntityItem;
 import net.minecraft.entity.player.EntityPlayerMP;
-import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.item.Item;
+import net.minecraft.item.ItemBlock;
+import net.minecraft.item.ItemStack;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.world.World;
 import net.minecraft.world.WorldServer;
@@ -30,42 +33,24 @@ public final class RtsStorageManager {
 
     private RtsStorageManager() {}
 
+    public static Map<UUID, RtsStorageSession> getSessions() {
+        return sessions;
+    }
+
     public static RtsStorageSession getSession(EntityPlayerMP player) {
-        UUID id = RtsPlayerUtil.getUUID(player);
-        RtsStorageSession session = sessions.get(id);
-        if (session == null) {
-            session = new RtsStorageSession();
-            sessions.put(id, session);
-        }
-        return session;
+        return com.rtsbuilding.rtsbuilding.server.service.RtsSessionService.getSession(player);
     }
 
     public static void removeSession(EntityPlayerMP player) {
-        UUID id = RtsPlayerUtil.getUUID(player);
-        sessions.remove(id);
+        com.rtsbuilding.rtsbuilding.server.service.RtsSessionService.removeSession(player);
     }
 
-    private static final String NBT_STORAGE_ROOT = "rtsbuilding_storage";
-
     public static void saveSessionNBT(EntityPlayerMP player) {
-        if (player == null) return;
-        RtsStorageSession session = sessions.get(RtsPlayerUtil.getUUID(player));
-        if (session == null) return;
-        NBTTagCompound root = new NBTTagCompound();
-        session.writeToNBT(root);
-        player.getEntityData()
-            .setTag(NBT_STORAGE_ROOT, root);
+        com.rtsbuilding.rtsbuilding.server.service.RtsSessionService.saveSessionNBT(player);
     }
 
     public static void loadSessionNBT(EntityPlayerMP player) {
-        if (player == null) return;
-        UUID id = RtsPlayerUtil.getUUID(player);
-        RtsStorageSession session = sessions.get(id);
-        if (session == null) return;
-        NBTTagCompound persistent = player.getEntityData();
-        if (persistent.hasKey(NBT_STORAGE_ROOT, 10)) {
-            session.readFromNBT(persistent.getCompoundTag(NBT_STORAGE_ROOT));
-        }
+        com.rtsbuilding.rtsbuilding.server.service.RtsSessionService.loadSessionNBT(player);
     }
 
     public static void onServerTick(WorldServer world) {
@@ -215,7 +200,7 @@ public final class RtsStorageManager {
     }
 
     public static void clearAll() {
-        sessions.clear();
+        com.rtsbuilding.rtsbuilding.server.service.RtsSessionService.clearAll();
     }
 
     // ======== Bug8修复: 方块破坏时清理存储绑定 ========
@@ -700,6 +685,111 @@ public final class RtsStorageManager {
         RtsbuildingMod.LOGGER
             .debug("RtsStorageManager: consumed {} x{} from storage for {}", itemId, amount, player.getDisplayName());
 
+        return true;
+    }
+
+    public static boolean placeBlockDirect(EntityPlayerMP player, int clickedX, int clickedY, int clickedZ, byte face,
+        double hitX, double hitY, double hitZ, byte rotateSteps, boolean forcePlace, boolean skipIfOccupied,
+        String itemId, ItemStack itemPrototype, boolean quickBuild) {
+        if (player == null || player.worldObj == null) return false;
+        World world = player.worldObj;
+        if (skipIfOccupied && !world.isAirBlock(clickedX, clickedY, clickedZ)) return false;
+
+        Block block = null;
+        int meta = 0;
+        if (itemPrototype != null && itemPrototype.getItem() instanceof ItemBlock) {
+            ItemBlock itemBlock = (ItemBlock) itemPrototype.getItem();
+            block = itemBlock.field_150939_a;
+            meta = itemPrototype.getItemDamage();
+        } else if (itemId != null && !itemId.isEmpty()) {
+            String id = itemId.contains(":") ? itemId.substring(itemId.indexOf(':') + 1) : itemId;
+            Item item = (Item) Item.itemRegistry.getObject(id);
+            if (item instanceof ItemBlock) block = ((ItemBlock) item).field_150939_a;
+            if (block == null) block = (Block) Block.blockRegistry.getObject(id);
+        }
+
+        if (block == null) return false;
+        if (rotateSteps != 0) meta = (rotateSteps & 0xFF) % 4;
+
+        boolean hasLinkedStorage = getSession(player).isAnyLinked();
+        boolean creative = player.capabilities.isCreativeMode;
+        boolean consumed = creative;
+        ItemStack consumedStack = null;
+        boolean consumedFromInventory = false;
+
+        if (!consumed && hasLinkedStorage) consumed = tryConsumeBlock(player, itemId, meta, 1);
+        if (!consumed) {
+            Item blockItem = Item.getItemFromBlock(block);
+            if (blockItem != null) {
+                for (int i = 0; i < player.inventory.mainInventory.length; i++) {
+                    ItemStack invStack = player.inventory.mainInventory[i];
+                    if (invStack != null && invStack.getItem() == blockItem && invStack.getItemDamage() == meta) {
+                        consumedStack = invStack.copy();
+                        invStack.stackSize--;
+                        if (invStack.stackSize <= 0) player.inventory.mainInventory[i] = null;
+                        consumed = true;
+                        consumedFromInventory = true;
+                        break;
+                    }
+                }
+                if (consumed) player.inventoryContainer.detectAndSendChanges();
+            }
+        }
+        if (!consumed) return false;
+
+        int actualMeta = block
+            .onBlockPlaced(world, clickedX, clickedY, clickedZ, face, (float) hitX, (float) hitY, (float) hitZ, meta);
+        int placeX = clickedX, placeY = clickedY, placeZ = clickedZ;
+        boolean canPlaceHere = forcePlace || quickBuild;
+        if (!canPlaceHere) {
+            Block existing = world.getBlock(clickedX, clickedY, clickedZ);
+            canPlaceHere = existing == null || existing.isAir(world, clickedX, clickedY, clickedZ)
+                || existing.getMaterial()
+                    .isReplaceable();
+        }
+        if (!canPlaceHere) {
+            switch (face) {
+                case 0:
+                    placeY--;
+                    break;
+                case 1:
+                    placeY++;
+                    break;
+                case 2:
+                    placeZ--;
+                    break;
+                case 3:
+                    placeZ++;
+                    break;
+                case 4:
+                    placeX--;
+                    break;
+                case 5:
+                    placeX++;
+                    break;
+            }
+        }
+
+        boolean placed = world.setBlock(placeX, placeY, placeZ, block, actualMeta, 3);
+        if (!placed) {
+            if (consumedFromInventory) {
+                player.inventory.addItemStackToInventory(consumedStack);
+                player.inventoryContainer.detectAndSendChanges();
+            } else if (!creative && hasLinkedStorage) {
+                getSession(player).addItem(itemId, meta, 1);
+            }
+            return false;
+        }
+
+        world.playSoundEffect(
+            placeX + 0.5,
+            placeY + 0.5,
+            placeZ + 0.5,
+            block.stepSound.func_150496_b(),
+            (block.stepSound.getVolume() + 1.0F) / 2.0F,
+            block.stepSound.getPitch() * 0.8F);
+        world.playAuxSFX(2005, placeX, placeY, placeZ, 0);
+        sendStoragePage(player, 0, 0);
         return true;
     }
 

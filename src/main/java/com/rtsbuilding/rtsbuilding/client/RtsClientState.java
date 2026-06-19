@@ -35,6 +35,16 @@ public class RtsClientState {
     /** Bug9修复：设置面板是否作为子画面打开 */
     public boolean settingsScreenOpen = false;
 
+    // ---- 历史/撤销状态 ----
+    public int historyCount;
+    public int redoCount;
+    public int guideStep = -1;
+
+    public void setHistoryCounts(int hc, int rc) {
+        historyCount = hc;
+        redoCount = rc;
+    }
+
     // ---- 单例 ----
     private static RtsClientState INSTANCE;
 

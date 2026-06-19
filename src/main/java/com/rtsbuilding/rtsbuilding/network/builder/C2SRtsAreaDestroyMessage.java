@@ -100,6 +100,30 @@ public class C2SRtsAreaDestroyMessage implements IMessage {
             EntityPlayerMP player = ctx.getServerHandler().playerEntity;
             if (player == null) return null;
 
+            if (com.rtsbuilding.rtsbuilding.server.pipeline.core.PipelineRegistry
+                .has(com.rtsbuilding.rtsbuilding.server.workflow.model.RtsWorkflowType.AREA_DESTROY)) {
+                java.util.Map<String, Object> args = new java.util.HashMap<String, Object>();
+                args.put(
+                    com.rtsbuilding.rtsbuilding.server.pipeline.mining.AreaDestroyExecutePipe.KEY_POSITIONS.name(),
+                    msg.positions);
+                args.put(
+                    com.rtsbuilding.rtsbuilding.server.pipeline.mining.MiningExecutePipe.KEY_TOOL_SLOT.name(),
+                    Byte.valueOf(msg.toolSlot));
+                args.put(
+                    com.rtsbuilding.rtsbuilding.server.pipeline.mining.MiningExecutePipe.KEY_TOOL_ITEM_ID.name(),
+                    msg.toolItemId);
+                args.put(
+                    com.rtsbuilding.rtsbuilding.server.pipeline.mining.MiningExecutePipe.KEY_TOOL_PROTOTYPE.name(),
+                    msg.toolPrototype);
+                @SuppressWarnings("unchecked")
+                com.rtsbuilding.rtsbuilding.server.pipeline.core.WorkflowPipeline<com.rtsbuilding.rtsbuilding.server.pipeline.core.PipelineContext> pipeline = (com.rtsbuilding.rtsbuilding.server.pipeline.core.WorkflowPipeline<com.rtsbuilding.rtsbuilding.server.pipeline.core.PipelineContext>) com.rtsbuilding.rtsbuilding.server.pipeline.core.PipelineRegistry
+                    .get(com.rtsbuilding.rtsbuilding.server.workflow.model.RtsWorkflowType.AREA_DESTROY);
+                com.rtsbuilding.rtsbuilding.server.pipeline.core.PipelineResult result = pipeline
+                    .execute(new com.rtsbuilding.rtsbuilding.server.pipeline.core.PipelineContext(player, args));
+                if (!(result instanceof com.rtsbuilding.rtsbuilding.server.pipeline.core.PipelineResult.Failure))
+                    return null;
+            }
+
             if (!RtsCameraManager.isActive(player)) return null;
 
             if (!RtsProgressionManager.canUse(player, RtsFeature.AREA_DESTROY)) {

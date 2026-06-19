@@ -1,5 +1,6 @@
 package com.rtsbuilding.rtsbuilding.client.panel.quickbuild;
 
+import com.rtsbuilding.rtsbuilding.common.BuildShape;
 import com.rtsbuilding.rtsbuilding.util.BlockPos;
 
 /**

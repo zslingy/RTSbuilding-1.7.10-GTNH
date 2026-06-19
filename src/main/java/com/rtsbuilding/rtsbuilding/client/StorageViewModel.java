@@ -186,6 +186,14 @@ public class StorageViewModel {
         hoveredIndex = -1;
     }
 
+    public int lastDirtyStorageId;
+    public byte lastDirtyFlags;
+
+    public void markDirty(int storageId, byte flags) {
+        lastDirtyStorageId = storageId;
+        lastDirtyFlags = flags;
+    }
+
     public void resetForNewSession() {
         entries.clear();
         filteredEntries.clear();

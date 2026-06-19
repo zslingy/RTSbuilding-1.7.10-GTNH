@@ -32,12 +32,24 @@ public class QuestDetectOverlay implements IRtsPanel {
 
     @Override
     public boolean isVisible() {
-        return false;
-    } // 桩
+        return state.progression.questDetectPhase >= 0;
+    }
 
     @Override
     public void render(GuiScreen screen, int mouseX, int mouseY, float partialTicks) {
-        // 桩：后续接入进度检测数据
+        if (!isVisible()) return;
+
+        ovX = screen.width / 2 - 100;
+        ovY = 10;
+
+        int scanned = state.progression.questDetectScanned;
+        int total = state.progression.questDetectTotal;
+        String text = "Quest Scan: " + scanned + " / " + total;
+        int color = scanned >= total ? 0x55FF55 : 0xFFCC44;
+
+        net.minecraft.client.gui.Gui.drawRect(ovX, ovY, ovX + 200, ovY + 30, 0xCC111111);
+        net.minecraft.client.gui.Gui.drawRect(ovX, ovY, ovX + 200, ovY + 1, 0xFF666666);
+        screen.mc.fontRenderer.drawString(text, ovX + 8, ovY + 11, color);
     }
 
     @Override

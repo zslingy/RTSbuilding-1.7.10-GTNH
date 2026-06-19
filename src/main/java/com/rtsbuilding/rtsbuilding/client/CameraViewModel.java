@@ -33,6 +33,12 @@ public class CameraViewModel {
     /** 锚点坐标 */
     public double anchorX, anchorY, anchorZ;
 
+    public void setAnchorPosition(double x, double y, double z) {
+        anchorX = x;
+        anchorY = y;
+        anchorZ = z;
+    }
+
     // ---- 状态 ----
     public boolean isActive = false;
     public boolean homeSelection = false;

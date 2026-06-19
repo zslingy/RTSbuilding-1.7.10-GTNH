@@ -1,12 +1,21 @@
 package com.rtsbuilding.rtsbuilding.network.builder;
 
+import java.util.HashMap;
+import java.util.Map;
+
 import net.minecraft.block.Block;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.world.World;
 
 import com.rtsbuilding.rtsbuilding.RtsbuildingMod;
 import com.rtsbuilding.rtsbuilding.server.camera.RtsCameraManager;
+import com.rtsbuilding.rtsbuilding.server.pipeline.core.PipelineContext;
+import com.rtsbuilding.rtsbuilding.server.pipeline.core.PipelineRegistry;
+import com.rtsbuilding.rtsbuilding.server.pipeline.core.PipelineResult;
+import com.rtsbuilding.rtsbuilding.server.pipeline.core.WorkflowPipeline;
+import com.rtsbuilding.rtsbuilding.server.pipeline.mining.MiningExecutePipe;
 import com.rtsbuilding.rtsbuilding.server.policy.RtsBreakPolicy;
+import com.rtsbuilding.rtsbuilding.server.workflow.model.RtsWorkflowType;
 
 import cpw.mods.fml.common.network.simpleimpl.IMessage;
 import cpw.mods.fml.common.network.simpleimpl.IMessageHandler;
@@ -74,6 +83,23 @@ public class C2SRtsBreakMessage implements IMessage {
         public IMessage onMessage(C2SRtsBreakMessage msg, MessageContext ctx) {
             EntityPlayerMP player = ctx.getServerHandler().playerEntity;
             if (player == null) return null;
+
+            if (PipelineRegistry.has(RtsWorkflowType.MINE_SINGLE)) {
+                Map<String, Object> args = new HashMap<String, Object>();
+                args.put(MiningExecutePipe.KEY_X.name(), Integer.valueOf(msg.posX));
+                args.put(MiningExecutePipe.KEY_Y.name(), Integer.valueOf(msg.posY));
+                args.put(MiningExecutePipe.KEY_Z.name(), Integer.valueOf(msg.posZ));
+                args.put(MiningExecutePipe.KEY_FACE.name(), Byte.valueOf(msg.face));
+                args.put(MiningExecutePipe.KEY_TOOL_SLOT.name(), Byte.valueOf((byte) -1));
+                args.put(MiningExecutePipe.KEY_TOOL_ITEM_ID.name(), "");
+                args.put(MiningExecutePipe.KEY_TOOL_PROTOTYPE.name(), null);
+                args.put(MiningExecutePipe.KEY_ALLOW_PLACED_RECOVERY.name(), Boolean.FALSE);
+                @SuppressWarnings("unchecked")
+                WorkflowPipeline<PipelineContext> pipeline = (WorkflowPipeline<PipelineContext>) PipelineRegistry
+                    .get(RtsWorkflowType.MINE_SINGLE);
+                PipelineResult result = pipeline.execute(new PipelineContext(player, args));
+                if (!(result instanceof PipelineResult.Failure)) return null;
+            }
 
             // 前置检查：必须在 RTS 相机模式中
             if (!RtsCameraManager.isActive(player)) {

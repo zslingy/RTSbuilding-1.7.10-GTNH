@@ -52,6 +52,9 @@ public class InteractionViewModel {
     public int areaDestroySizeY = 3;
     public int areaDestroySizeZ = 3;
 
+    // ---- 挂起放置 ----
+    public int pendingPlacementCount;
+
     // ---- 绑定 ----
     public final List<GuiBindingEntry> bindings = new ArrayList<>();
     public boolean bindingEditMode = false;
@@ -107,6 +110,9 @@ public class InteractionViewModel {
     public boolean damageSoundEnabled = true;
     public boolean damageAutoReturnEnabled = true;
     public boolean bdNetworkEnabled = false;
+
+    public float damageAmount = 0;
+    public boolean lowHealth = false;
 
     // ---- 最近使用的方块 ----
     public final List<String> recentBlocks = new ArrayList<>();

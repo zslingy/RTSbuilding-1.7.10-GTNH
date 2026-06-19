@@ -50,6 +50,16 @@ public class RtsStorageSession {
     private static final String NBT_AUTO_STORE = "autoStoreMinedDrops";
     public boolean autoStoreMinedDrops = true;
 
+    private byte builderMode = 0;
+
+    public byte getBuilderMode() {
+        return builderMode;
+    }
+
+    public void setBuilderMode(byte mode) {
+        this.builderMode = mode;
+    }
+
     public boolean isAutoStoreMinedDrops() {
         return autoStoreMinedDrops;
     }

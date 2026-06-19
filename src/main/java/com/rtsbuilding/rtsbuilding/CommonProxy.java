@@ -45,10 +45,16 @@ public class CommonProxy {
         // ── 注册存储管理器 tick（驱动漏斗拾取和 AE2 定期刷新） ──
         com.rtsbuilding.rtsbuilding.server.RtsStorageManager.register();
 
+        // ── 注册工作流管线（阶段8架构入口） ──
+        com.rtsbuilding.rtsbuilding.server.pipeline.RtsPipelineRegistration.registerAll();
+
         // ── Bug5修复：注册蓝图放置服务（ServerTickEvent 推进蓝图放置） ──
         FMLCommonHandler.instance()
             .bus()
             .register(com.rtsbuilding.rtsbuilding.blueprint.server.BlueprintPlacementService.create());
+
+        // ── 第七阶段：注册寻路服务（ServerTickEvent 推进寻路移动） ──
+        com.rtsbuilding.rtsbuilding.server.pathfinding.RtsPathfindingService.register();
 
         // ── Bug10修复：注册玩家登出/登录事件处理器（清理残留会话） ──
         FMLCommonHandler.instance()

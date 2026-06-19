@@ -1,5 +1,10 @@
 package com.rtsbuilding.rtsbuilding.network.storage;
 
+import net.minecraft.entity.player.EntityPlayerMP;
+
+import com.rtsbuilding.rtsbuilding.server.RtsStorageManager;
+import com.rtsbuilding.rtsbuilding.server.storage.RtsStorageSession;
+
 import cpw.mods.fml.common.network.simpleimpl.IMessage;
 import cpw.mods.fml.common.network.simpleimpl.IMessageHandler;
 import cpw.mods.fml.common.network.simpleimpl.MessageContext;
@@ -40,7 +45,30 @@ public class C2SRtsLinkedQuickMoveMessage implements IMessage {
 
         @Override
         public IMessage onMessage(C2SRtsLinkedQuickMoveMessage m, MessageContext c) {
-            // TODO: 实现从链接存储快速移动物品到背包的功能
+            EntityPlayerMP player = c.getServerHandler().playerEntity;
+            if (player == null) return null;
+            RtsStorageSession session = RtsStorageManager.getSession(player);
+            session.scanLinkedContainers(player.worldObj);
+            RtsStorageSession.PageResult result = session.queryPage("name_asc", 0, 88);
+            if (m.slot >= 0 && m.slot < result.items.size()) {
+                RtsStorageSession.StorageEntry entry = result.items.get(m.slot);
+                if (entry != null && entry.itemId != null) {
+                    int amount = m.mode == 0 ? 1 : (int) Math.min(entry.count, 64);
+                    if (RtsStorageManager.tryConsumeBlock(player, entry.itemId, entry.meta, amount)) {
+                        net.minecraft.item.Item item = (net.minecraft.item.Item) net.minecraft.item.Item.itemRegistry
+                            .getObject(entry.itemId);
+                        if (item != null) {
+                            net.minecraft.item.ItemStack stack = new net.minecraft.item.ItemStack(
+                                item,
+                                amount,
+                                entry.meta);
+                            player.inventory.addItemStackToInventory(stack);
+                            player.inventoryContainer.detectAndSendChanges();
+                        }
+                    }
+                }
+            }
+            RtsStorageManager.sendStoragePage(player, 0, 0);
             return null;
         }
     }

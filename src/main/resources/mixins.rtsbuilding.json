@@ -3,9 +3,12 @@
   "package": "com.rtsbuilding.rtsbuilding.mixin",
   "compatibilityLevel": "JAVA_8",
   "refmap": "mixins.rtsbuilding.refmap.json",
-  "client": [],
+  "client": [
+    "LocalPlayerMixin"
+  ],
   "mixins": [
-    "ChestMenuMixin"
+    "ChestMenuMixin",
+    "ModdedRemoteStillValidMixin"
   ],
   "injectors": {
     "defaultRequire": 1

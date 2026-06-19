@@ -1,9 +1,19 @@
 package com.rtsbuilding.rtsbuilding.network.builder;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
+import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.item.ItemStack;
+
+import com.rtsbuilding.rtsbuilding.server.pipeline.core.PipelineContext;
+import com.rtsbuilding.rtsbuilding.server.pipeline.core.PipelineRegistry;
+import com.rtsbuilding.rtsbuilding.server.pipeline.core.PipelineResult;
+import com.rtsbuilding.rtsbuilding.server.pipeline.core.WorkflowPipeline;
+import com.rtsbuilding.rtsbuilding.server.pipeline.placement.PlacementExecutePipe;
+import com.rtsbuilding.rtsbuilding.server.workflow.model.RtsWorkflowType;
 
 import cpw.mods.fml.common.network.ByteBufUtils;
 import cpw.mods.fml.common.network.simpleimpl.IMessage;
@@ -179,6 +189,25 @@ public class C2SRtsPlaceBatchMessage implements IMessage {
 
         @Override
         public IMessage onMessage(C2SRtsPlaceBatchMessage msg, MessageContext ctx) {
+            EntityPlayerMP player = ctx.getServerHandler().playerEntity;
+            if (player == null || !PipelineRegistry.has(RtsWorkflowType.PLACE_BATCH)) return null;
+            Map<String, Object> args = new HashMap<String, Object>();
+            args.put(PlacementExecutePipe.KEY_POSITIONS.name(), msg.clickedPositions);
+            args.put(PlacementExecutePipe.KEY_FACE.name(), Byte.valueOf(msg.face));
+            args.put(PlacementExecutePipe.KEY_HIT_X.name(), Double.valueOf(msg.hitOffsetX));
+            args.put(PlacementExecutePipe.KEY_HIT_Y.name(), Double.valueOf(msg.hitOffsetY));
+            args.put(PlacementExecutePipe.KEY_HIT_Z.name(), Double.valueOf(msg.hitOffsetZ));
+            args.put(PlacementExecutePipe.KEY_ROTATE_STEPS.name(), Byte.valueOf(msg.rotateSteps));
+            args.put(PlacementExecutePipe.KEY_FORCE_PLACE.name(), Boolean.valueOf(msg.forcePlace));
+            args.put(PlacementExecutePipe.KEY_SKIP_IF_OCCUPIED.name(), Boolean.valueOf(msg.skipIfOccupied));
+            args.put(PlacementExecutePipe.KEY_ITEM_ID.name(), msg.itemId);
+            args.put(PlacementExecutePipe.KEY_ITEM_PROTOTYPE.name(), msg.itemPrototype);
+            args.put(PlacementExecutePipe.KEY_QUICK_BUILD.name(), Boolean.FALSE);
+            @SuppressWarnings("unchecked")
+            WorkflowPipeline<PipelineContext> pipeline = (WorkflowPipeline<PipelineContext>) PipelineRegistry
+                .get(RtsWorkflowType.PLACE_BATCH);
+            PipelineResult result = pipeline.execute(new PipelineContext(player, args));
+            if (result instanceof PipelineResult.Failure) return null;
             return null;
         }
     }

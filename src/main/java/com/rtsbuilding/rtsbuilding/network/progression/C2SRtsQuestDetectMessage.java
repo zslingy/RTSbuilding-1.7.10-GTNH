@@ -1,5 +1,9 @@
 package com.rtsbuilding.rtsbuilding.network.progression;
 
+import net.minecraft.entity.player.EntityPlayerMP;
+
+import com.rtsbuilding.rtsbuilding.server.progression.RtsQuestDetectService;
+
 import cpw.mods.fml.common.network.simpleimpl.IMessage;
 import cpw.mods.fml.common.network.simpleimpl.IMessageHandler;
 import cpw.mods.fml.common.network.simpleimpl.MessageContext;
@@ -34,7 +38,9 @@ public class C2SRtsQuestDetectMessage implements IMessage {
 
         @Override
         public IMessage onMessage(C2SRtsQuestDetectMessage msg, MessageContext ctx) {
-            return null; // stub — stage 3
+            EntityPlayerMP player = ctx.getServerHandler().playerEntity;
+            if (player != null) RtsQuestDetectService.runDetection(player);
+            return null;
         }
     }
 }

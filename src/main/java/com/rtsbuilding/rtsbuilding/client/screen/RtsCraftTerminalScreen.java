@@ -223,10 +223,10 @@ public class RtsCraftTerminalScreen extends GuiContainer {
                         StorageViewModel.StorageEntry entry = entries.get(index);
                         ItemStack stack = svm.resolveStack(entry.itemId, entry.meta);
                         if (stack != null) {
-                            // TODO: Send network message to pick up item from linked storage
-                            // For now, just show the item info
                             state.interaction.selectedBlockId = entry.itemId;
                             state.interaction.selectedBlockMeta = entry.meta;
+                            RtsNetworkManager.NETWORK.sendToServer(
+                                new com.rtsbuilding.rtsbuilding.network.storage.C2SRtsLinkedPickupMessage(0, 0));
                         }
                         return;
                     }

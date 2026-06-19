@@ -9,6 +9,7 @@ import org.lwjgl.input.Keyboard;
 
 import com.rtsbuilding.rtsbuilding.client.RtsClientState;
 import com.rtsbuilding.rtsbuilding.client.RtsScreen;
+import com.rtsbuilding.rtsbuilding.client.render.RtsCameraEntityRenderer;
 import com.rtsbuilding.rtsbuilding.client.render.RtsWorldRenderer;
 import com.rtsbuilding.rtsbuilding.network.RtsNetworkManager;
 import com.rtsbuilding.rtsbuilding.network.camera.C2SRtsToggleCameraMessage;
@@ -102,6 +103,12 @@ public class ClientProxy extends CommonProxy {
         // ---- 阶段5：注册 RTS 世界渲染器到 Forge 事件总线 ----
         MinecraftForge.EVENT_BUS.register(worldRenderer);
         RtsbuildingMod.LOGGER.info("ClientProxy: Registered RtsWorldRenderer on Forge EVENT_BUS");
+
+        // ---- 第八阶段：注册 RtsCameraEntity 实体渲染器 ----
+        cpw.mods.fml.client.registry.RenderingRegistry.registerEntityRenderingHandler(
+            com.rtsbuilding.rtsbuilding.entity.RtsCameraEntity.class,
+            new RtsCameraEntityRenderer());
+        RtsbuildingMod.LOGGER.info("ClientProxy: Registered RtsCameraEntityRenderer");
 
         // ---- 阶段6：注册按键事件处理器 ----
         FMLCommonHandler.instance()

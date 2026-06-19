@@ -1,5 +1,9 @@
 package com.rtsbuilding.rtsbuilding.network.builder;
 
+import net.minecraft.entity.player.EntityPlayerMP;
+
+import com.rtsbuilding.rtsbuilding.server.RtsStorageManager;
+
 import cpw.mods.fml.common.network.simpleimpl.IMessage;
 import cpw.mods.fml.common.network.simpleimpl.IMessageHandler;
 import cpw.mods.fml.common.network.simpleimpl.MessageContext;
@@ -32,7 +36,12 @@ public class C2SRtsSetModeMessage implements IMessage {
     public static class Handler implements IMessageHandler<C2SRtsSetModeMessage, IMessage> {
 
         @Override
-        public IMessage onMessage(C2SRtsSetModeMessage msg, MessageContext ctx) {
+        public IMessage onMessage(C2SRtsSetModeMessage m, MessageContext c) {
+            EntityPlayerMP player = c.getServerHandler().playerEntity;
+            if (player == null) return null;
+
+            RtsStorageManager.getSession(player)
+                .setBuilderMode(m.mode);
             return null;
         }
     }

@@ -44,7 +44,15 @@ public class S2CRtsDamageFeedbackMessage implements IMessage {
         @Override
         @SideOnly(Side.CLIENT)
         public IMessage onMessage(S2CRtsDamageFeedbackMessage msg, MessageContext ctx) {
-            return null; // stub — stage 4
+            net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getMinecraft();
+            if (mc.thePlayer == null) return null;
+            com.rtsbuilding.rtsbuilding.client.RtsClientState.get().interaction.damageAmount = msg.getAmount();
+            com.rtsbuilding.rtsbuilding.client.RtsClientState.get().interaction.lowHealth = msg.isLowHealth();
+            if (msg.isLowHealth()) {
+                mc.thePlayer
+                    .sendChatMessage("Low health warning: last damage " + String.format("%.1f", msg.getAmount()));
+            }
+            return null;
         }
     }
 }

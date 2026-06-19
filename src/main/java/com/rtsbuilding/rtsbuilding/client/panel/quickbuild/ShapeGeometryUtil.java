@@ -9,6 +9,7 @@ import java.util.Set;
 
 import net.minecraftforge.common.util.ForgeDirection;
 
+import com.rtsbuilding.rtsbuilding.common.BuildShape;
 import com.rtsbuilding.rtsbuilding.util.BlockPos;
 
 /**

@@ -8,11 +8,11 @@ import net.minecraft.util.MovingObjectPosition;
 import net.minecraft.util.Vec3;
 import net.minecraft.world.World;
 
-import com.rtsbuilding.rtsbuilding.client.panel.quickbuild.BuildShape;
 import com.rtsbuilding.rtsbuilding.client.panel.quickbuild.ShapeBuildPhase;
 import com.rtsbuilding.rtsbuilding.client.panel.quickbuild.ShapeBuildSession;
 import com.rtsbuilding.rtsbuilding.client.panel.quickbuild.ShapeFillMode;
 import com.rtsbuilding.rtsbuilding.client.panel.quickbuild.ShapeGeometryUtil;
+import com.rtsbuilding.rtsbuilding.common.BuildShape;
 import com.rtsbuilding.rtsbuilding.common.BuilderMode;
 import com.rtsbuilding.rtsbuilding.entity.RtsCameraEntity;
 import com.rtsbuilding.rtsbuilding.network.RtsNetworkManager;

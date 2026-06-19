@@ -5,8 +5,11 @@ import java.awt.Rectangle;
 import net.minecraft.client.gui.FontRenderer;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.renderer.Tessellator;
+import net.minecraft.util.ResourceLocation;
 
 import org.lwjgl.opengl.GL11;
+
+import com.rtsbuilding.rtsbuilding.client.widget.WindowButton;
 
 /**
  * 浮动窗口面板基类 — 1.7.10 适配版。
@@ -17,6 +20,9 @@ public abstract class RtsWindowPanel implements IRtsPanel {
 
     private static final int TITLE_BAR_H = 16;
     private static final int CLOSE_BTN_W = 14;
+    private static final ResourceLocation CLOSE_BUTTON_TEXTURE = new ResourceLocation(
+        "rtsbuilding",
+        "textures/gui/general/close_button.png");
     private static final int SCREEN_MARGIN = 4;
     private static final int MIN_W = 80;
     private static final int MIN_H = 60;
@@ -223,10 +229,10 @@ public abstract class RtsWindowPanel implements IRtsPanel {
         int cx = windowX + windowWidth - CLOSE_BTN_W - 4;
         int cy = windowY + 1;
         boolean hoverClose = isInsideCloseButton(mx, my);
-        int closeBg = hoverClose ? 0xCC552222 : 0x44222222;
-        drawRect(cx, cy, cx + CLOSE_BTN_W, cy + CLOSE_BTN_W, closeBg);
-        int closeColor = hoverClose ? 0xFFFF5555 : 0xFF888888;
-        fr.drawString("x", cx + (CLOSE_BTN_W - fr.getStringWidth("x")) / 2, cy + 1, closeColor);
+        if (hoverClose) {
+            drawRect(cx, cy, cx + CLOSE_BTN_W, cy + CLOSE_BTN_W, 0x66552222);
+        }
+        WindowButton.drawTexture(screen.mc, CLOSE_BUTTON_TEXTURE, cx, cy, CLOSE_BTN_W, CLOSE_BTN_W);
     }
 
     // ==== GL11 渲染辅助 ====

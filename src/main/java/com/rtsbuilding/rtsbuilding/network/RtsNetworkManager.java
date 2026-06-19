@@ -13,7 +13,7 @@ public final class RtsNetworkManager {
     public static void registerMessages() {
         int disc = 0;
 
-        // ---- Camera (3 messages) ----
+        // ---- Camera (6 messages) ----
         NETWORK.registerMessage(
             com.rtsbuilding.rtsbuilding.network.camera.C2SRtsToggleCameraMessage.Handler.class,
             com.rtsbuilding.rtsbuilding.network.camera.C2SRtsToggleCameraMessage.class,
@@ -29,8 +29,13 @@ public final class RtsNetworkManager {
             com.rtsbuilding.rtsbuilding.network.camera.S2CRtsCameraStateMessage.class,
             disc++,
             Side.CLIENT);
+        NETWORK.registerMessage(
+            com.rtsbuilding.rtsbuilding.network.camera.S2CRtsCameraAnchorMessage.Handler.class,
+            com.rtsbuilding.rtsbuilding.network.camera.S2CRtsCameraAnchorMessage.class,
+            disc++,
+            Side.CLIENT);
 
-        // ---- Builder (17 messages) ----
+        // ---- Builder (30 messages) ----
         NETWORK.registerMessage(
             com.rtsbuilding.rtsbuilding.network.builder.C2SRtsSetModeMessage.Handler.class,
             com.rtsbuilding.rtsbuilding.network.builder.C2SRtsSetModeMessage.class,
@@ -122,8 +127,58 @@ public final class RtsNetworkManager {
             com.rtsbuilding.rtsbuilding.network.builder.C2SRtsUseItemMessage.class,
             disc++,
             Side.SERVER);
+        NETWORK.registerMessage(
+            com.rtsbuilding.rtsbuilding.network.builder.C2SRtsDeleteWorkflowMessage.Handler.class,
+            com.rtsbuilding.rtsbuilding.network.builder.C2SRtsDeleteWorkflowMessage.class,
+            disc++,
+            Side.SERVER);
+        NETWORK.registerMessage(
+            com.rtsbuilding.rtsbuilding.network.builder.C2SRtsPauseWorkflowMessage.Handler.class,
+            com.rtsbuilding.rtsbuilding.network.builder.C2SRtsPauseWorkflowMessage.class,
+            disc++,
+            Side.SERVER);
+        NETWORK.registerMessage(
+            com.rtsbuilding.rtsbuilding.network.builder.S2CRtsWorkflowProgressMessage.Handler.class,
+            com.rtsbuilding.rtsbuilding.network.builder.S2CRtsWorkflowProgressMessage.class,
+            disc++,
+            Side.CLIENT);
+        NETWORK.registerMessage(
+            com.rtsbuilding.rtsbuilding.network.builder.S2CRtsWorkflowProgressBatchMessage.Handler.class,
+            com.rtsbuilding.rtsbuilding.network.builder.S2CRtsWorkflowProgressBatchMessage.class,
+            disc++,
+            Side.CLIENT);
+        NETWORK.registerMessage(
+            com.rtsbuilding.rtsbuilding.network.builder.C2SRtsUndoMessage.Handler.class,
+            com.rtsbuilding.rtsbuilding.network.builder.C2SRtsUndoMessage.class,
+            disc++,
+            Side.SERVER);
+        NETWORK.registerMessage(
+            com.rtsbuilding.rtsbuilding.network.builder.S2CRtsHistorySyncMessage.Handler.class,
+            com.rtsbuilding.rtsbuilding.network.builder.S2CRtsHistorySyncMessage.class,
+            disc++,
+            Side.CLIENT);
+        NETWORK.registerMessage(
+            com.rtsbuilding.rtsbuilding.network.builder.C2SRtsSubmitPendingMessage.Handler.class,
+            com.rtsbuilding.rtsbuilding.network.builder.C2SRtsSubmitPendingMessage.class,
+            disc++,
+            Side.SERVER);
+        NETWORK.registerMessage(
+            com.rtsbuilding.rtsbuilding.network.builder.C2SRtsScanResumePlacementMessage.Handler.class,
+            com.rtsbuilding.rtsbuilding.network.builder.C2SRtsScanResumePlacementMessage.class,
+            disc++,
+            Side.SERVER);
+        NETWORK.registerMessage(
+            com.rtsbuilding.rtsbuilding.network.builder.C2SRtsResumePlacementActionMessage.Handler.class,
+            com.rtsbuilding.rtsbuilding.network.builder.C2SRtsResumePlacementActionMessage.class,
+            disc++,
+            Side.SERVER);
+        NETWORK.registerMessage(
+            com.rtsbuilding.rtsbuilding.network.builder.S2CRtsResumePlacementScanMessage.Handler.class,
+            com.rtsbuilding.rtsbuilding.network.builder.S2CRtsResumePlacementScanMessage.class,
+            disc++,
+            Side.CLIENT);
 
-        // ---- Craft (9 messages) ----
+        // ---- Craft (8 messages) ----
         NETWORK.registerMessage(
             com.rtsbuilding.rtsbuilding.network.craft.C2SRtsCraftRecipeMessage.Handler.class,
             com.rtsbuilding.rtsbuilding.network.craft.C2SRtsCraftRecipeMessage.class,
@@ -172,7 +227,7 @@ public final class RtsNetworkManager {
             disc++,
             Side.CLIENT);
 
-        // ---- Progression (11 messages) ----
+        // ---- Progression (9 messages) ----
         NETWORK.registerMessage(
             com.rtsbuilding.rtsbuilding.network.progression.C2SRtsBeginHomeSelectionMessage.Handler.class,
             com.rtsbuilding.rtsbuilding.network.progression.C2SRtsBeginHomeSelectionMessage.class,
@@ -219,7 +274,7 @@ public final class RtsNetworkManager {
             disc++,
             Side.CLIENT);
 
-        // ---- Storage (23 messages) ----
+        // ---- Storage (24 messages) ----
         NETWORK.registerMessage(
             com.rtsbuilding.rtsbuilding.network.storage.C2SRtsCloseRemoteMenuMessage.Handler.class,
             com.rtsbuilding.rtsbuilding.network.storage.C2SRtsCloseRemoteMenuMessage.class,
@@ -330,6 +385,11 @@ public final class RtsNetworkManager {
             com.rtsbuilding.rtsbuilding.network.storage.S2CRtsLinkStorageStatusMessage.class,
             disc++,
             Side.CLIENT);
+        NETWORK.registerMessage(
+            com.rtsbuilding.rtsbuilding.network.storage.S2CRtsStorageDirtyMessage.Handler.class,
+            com.rtsbuilding.rtsbuilding.network.storage.S2CRtsStorageDirtyMessage.class,
+            disc++,
+            Side.CLIENT);
 
         // ---- Blueprint (2 messages) ----
         NETWORK.registerMessage(
@@ -340,6 +400,18 @@ public final class RtsNetworkManager {
         NETWORK.registerMessage(
             com.rtsbuilding.rtsbuilding.blueprint.network.S2CBlueprintStatusMessage.Handler.class,
             com.rtsbuilding.rtsbuilding.blueprint.network.S2CBlueprintStatusMessage.class,
+            disc++,
+            Side.CLIENT);
+
+        // ---- Pathfinding (2 messages) ----
+        NETWORK.registerMessage(
+            com.rtsbuilding.rtsbuilding.network.pathfinding.C2SRtsPathfindingMessage.Handler.class,
+            com.rtsbuilding.rtsbuilding.network.pathfinding.C2SRtsPathfindingMessage.class,
+            disc++,
+            Side.SERVER);
+        NETWORK.registerMessage(
+            com.rtsbuilding.rtsbuilding.network.pathfinding.S2CRtsPathfindingUpdateMessage.Handler.class,
+            com.rtsbuilding.rtsbuilding.network.pathfinding.S2CRtsPathfindingUpdateMessage.class,
             disc++,
             Side.CLIENT);
     }

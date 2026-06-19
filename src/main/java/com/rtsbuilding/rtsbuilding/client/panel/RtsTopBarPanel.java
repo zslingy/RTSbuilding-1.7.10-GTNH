@@ -6,9 +6,13 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.FontRenderer;
 import net.minecraft.client.gui.Gui;
 import net.minecraft.client.gui.GuiScreen;
+import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.StatCollector;
 
+import org.lwjgl.input.Mouse;
+
 import com.rtsbuilding.rtsbuilding.client.RtsClientState;
+import com.rtsbuilding.rtsbuilding.client.widget.WindowButton;
 import com.rtsbuilding.rtsbuilding.common.BuilderMode;
 
 /**
@@ -30,15 +34,11 @@ public class RtsTopBarPanel implements IRtsPanel {
     private static final int ROW3_HEIGHT = 16;
     private static final int TOTAL_HEIGHT = BAR_HEIGHT + ROW2_HEIGHT + ROW3_HEIGHT;
     private static final int STATUS_AREA_H = ROW2_HEIGHT + ROW3_HEIGHT;
-    private static final int MODE_BUTTON_W = 80;
+    private static final int MODE_BUTTON_W = 26;
     private static final int ACTION_BUTTON_W = 26;
+    private static final int ICON_SIZE = 18;
     private static final int BUTTON_SPACING = 2;
     private static final int BAR_COLOR_BG = 0xCC222222;
-    private static final int BUTTON_COLOR = 0xCC444444;
-    private static final int BUTTON_COLOR_ACTIVE = 0xCC6688CC;
-    private static final int BUTTON_COLOR_HOVER = 0xCC666666;
-    private static final int TEXT_COLOR = 0xFFFFFFFF;
-    private static final int TEXT_COLOR_ACTIVE = 0xFFFFFF44;
 
     private final RtsClientState state;
 
@@ -61,11 +61,6 @@ public class RtsTopBarPanel implements IRtsPanel {
     private static final BtnId[] TOP_BUTTONS = { BtnId.INTERACT, BtnId.LINK_STORAGE, BtnId.ROTATE, BtnId.FUNNEL,
         BtnId.QUICK_BUILD, BtnId.ULTIMINE, BtnId.CHUNK_VIEW, BtnId.GUIDE, BtnId.GEAR };
 
-    private static final String[] BTN_LABEL_KEYS = { "screen.rtsbuilding.mode.interact",
-        "screen.rtsbuilding.mode.link_storage", "screen.rtsbuilding.mode.rotate", "screen.rtsbuilding.mode.funnel",
-        "screen.rtsbuilding.mode.quick_build", "screen.rtsbuilding.mode.ultimine", "screen.rtsbuilding.mode.chunk_view",
-        "screen.rtsbuilding.btn.guide", "screen.rtsbuilding.mode.gear" };
-
     private static final int MODE_BUTTON_COUNT = 4;
 
     // 缩放按钮
@@ -73,13 +68,6 @@ public class RtsTopBarPanel implements IRtsPanel {
     private static final float ZOOM_MIN = 0.5f;
     private static final float ZOOM_MAX = 3.0f;
     private static final float ZOOM_STEP = 0.25f;
-
-    // 按钮图标
-    private static final String ICON_QUICK_BUILD = "\u2692";
-    private static final String ICON_ULTIMINE = "\u26CF";
-    private static final String ICON_CHUNK_VIEW = "\u25A6";
-    private static final String ICON_GUIDE = "\u2139";
-    private static final String ICON_GEAR = "\u2699";
 
     public RtsTopBarPanel() {
         this.state = RtsClientState.get();
@@ -114,23 +102,18 @@ public class RtsTopBarPanel implements IRtsPanel {
         // === Row 1: 按钮栏 ===
         int btnRowTop = barY + 2;
         int btnRowBottom = barY + BAR_HEIGHT - 2;
-        int btnYCenter = barY + BAR_HEIGHT / 2 - 4;
 
         // P2-4: GEAR按钮右对齐，先渲染在最右侧
         int gearBtnX = w - ACTION_BUTTON_W - 4;
-        boolean gearActive = isButtonActive(BtnId.GEAR);
-        int gearColor = gearActive ? BUTTON_COLOR_ACTIVE
-            : (isHovered(mouseX, mouseY, gearBtnX, btnRowTop, gearBtnX + ACTION_BUTTON_W, btnRowBottom)
-                ? BUTTON_COLOR_HOVER
-                : BUTTON_COLOR);
-        Gui.drawRect(gearBtnX, btnRowTop, gearBtnX + ACTION_BUTTON_W, btnRowBottom, gearColor);
-        String gearIcon = getButtonIcon(BtnId.GEAR);
-        drawCenteredString(
-            fr,
-            gearIcon,
-            gearBtnX + ACTION_BUTTON_W / 2,
-            btnYCenter,
-            gearActive ? TEXT_COLOR_ACTIVE : TEXT_COLOR);
+        renderTopBarButton(
+            screen,
+            BtnId.GEAR,
+            gearBtnX,
+            btnRowTop,
+            ACTION_BUTTON_W,
+            btnRowBottom - btnRowTop,
+            mouseX,
+            mouseY);
 
         // 其余按钮从左侧开始
         int btnX = 4;
@@ -140,31 +123,8 @@ public class RtsTopBarPanel implements IRtsPanel {
             boolean isMode = (i < MODE_BUTTON_COUNT);
             int bw = isMode ? MODE_BUTTON_W : ACTION_BUTTON_W;
 
-            boolean active = isButtonActive(id);
-
-            int btnColor;
-            if (active) {
-                btnColor = BUTTON_COLOR_ACTIVE;
-            } else if (isHovered(mouseX, mouseY, btnX, btnRowTop, btnX + bw, btnRowBottom)) {
-                btnColor = BUTTON_COLOR_HOVER;
-            } else {
-                btnColor = BUTTON_COLOR;
-            }
-
             int btnRight = btnX + bw;
-            Gui.drawRect(btnX, btnRowTop, btnRight, btnRowBottom, btnColor);
-
-            int textColor = active ? TEXT_COLOR_ACTIVE : TEXT_COLOR;
-            if (isMode) {
-                String label = StatCollector.translateToLocal(BTN_LABEL_KEYS[i]);
-                if (label == null || label.isEmpty() || label.startsWith("screen.")) {
-                    label = id.name();
-                }
-                drawCenteredString(fr, label, btnX + bw / 2, btnYCenter, textColor);
-            } else {
-                String icon = getButtonIcon(id);
-                drawCenteredString(fr, icon, btnX + bw / 2, btnYCenter, textColor);
-            }
+            renderTopBarButton(screen, id, btnX, btnRowTop, bw, btnRowBottom - btnRowTop, mouseX, mouseY);
 
             btnX = btnRight + BUTTON_SPACING;
         }
@@ -233,6 +193,51 @@ public class RtsTopBarPanel implements IRtsPanel {
 
     private static boolean isHovered(int mx, int my, int x1, int y1, int x2, int y2) {
         return mx >= x1 && mx <= x2 && my >= y1 && my <= y2;
+    }
+
+    private void renderTopBarButton(GuiScreen screen, BtnId id, int x, int y, int width, int height, int mouseX,
+        int mouseY) {
+        boolean hover = isHovered(mouseX, mouseY, x, y, x + width, y + height);
+        ResourceLocation texture = getButtonTexture(id, getVisualState(id, hover));
+        int iconX = x + (width - ICON_SIZE) / 2;
+        int iconY = y + (height - ICON_SIZE) / 2;
+        WindowButton.drawTexture(screen.mc, texture, iconX, iconY, ICON_SIZE, ICON_SIZE);
+    }
+
+    private String getVisualState(BtnId id, boolean hover) {
+        if (hover && Mouse.isButtonDown(0)) return "pressed";
+        if (isButtonActive(id)) return "active";
+        if (hover) return "hover";
+        return "inactive";
+    }
+
+    private static ResourceLocation getButtonTexture(BtnId id, String state) {
+        return new ResourceLocation("rtsbuilding", "textures/gui/topbar/" + getTextureBase(id) + "_" + state + ".png");
+    }
+
+    private static String getTextureBase(BtnId id) {
+        switch (id) {
+            case INTERACT:
+                return "mode_interact";
+            case LINK_STORAGE:
+                return "mode_link";
+            case ROTATE:
+                return "mode_rotate";
+            case FUNNEL:
+                return "mode_funnel";
+            case QUICK_BUILD:
+                return "quick_build";
+            case ULTIMINE:
+                return "ultimine";
+            case CHUNK_VIEW:
+                return "chunk_view";
+            case GUIDE:
+                return "quest_detect";
+            case GEAR:
+                return "settings_gear";
+            default:
+                return "mode_interact";
+        }
     }
 
     @Override
@@ -379,23 +384,6 @@ public class RtsTopBarPanel implements IRtsPanel {
         return false;
     }
 
-    private static String getButtonIcon(BtnId id) {
-        switch (id) {
-            case QUICK_BUILD:
-                return ICON_QUICK_BUILD;
-            case ULTIMINE:
-                return ICON_ULTIMINE;
-            case CHUNK_VIEW:
-                return ICON_CHUNK_VIEW;
-            case GUIDE:
-                return ICON_GUIDE;
-            case GEAR:
-                return ICON_GEAR;
-            default:
-                return "?";
-        }
-    }
-
     @Override
     public boolean onMouseScroll(int mouseX, int mouseY, int scroll) {
         return false;
@@ -409,10 +397,6 @@ public class RtsTopBarPanel implements IRtsPanel {
     @Override
     public void resetFrameState() {
         hoveredButton = -1;
-    }
-
-    private static void drawCenteredString(FontRenderer fr, String text, int x, int y, int color) {
-        fr.drawString(text, x - fr.getStringWidth(text) / 2, y, color);
     }
 
     private static String getModeDisplayName(BuilderMode mode) {

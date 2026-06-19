@@ -1,14 +1,20 @@
 package com.rtsbuilding.rtsbuilding.network.builder;
 
-import net.minecraft.block.Block;
+import java.util.HashMap;
+import java.util.Map;
+
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.item.ItemStack;
-import net.minecraft.world.World;
 
-import com.rtsbuilding.rtsbuilding.progression.RtsFeature;
 import com.rtsbuilding.rtsbuilding.server.RtsMineManager;
-import com.rtsbuilding.rtsbuilding.server.camera.RtsCameraManager;
+import com.rtsbuilding.rtsbuilding.server.pipeline.core.PipelineContext;
+import com.rtsbuilding.rtsbuilding.server.pipeline.core.PipelineRegistry;
+import com.rtsbuilding.rtsbuilding.server.pipeline.core.PipelineResult;
+import com.rtsbuilding.rtsbuilding.server.pipeline.core.WorkflowPipeline;
+import com.rtsbuilding.rtsbuilding.server.pipeline.mining.MiningExecutePipe;
+import com.rtsbuilding.rtsbuilding.server.pipeline.mining.UltimineExecutePipe;
 import com.rtsbuilding.rtsbuilding.server.progression.RtsProgressionManager;
+import com.rtsbuilding.rtsbuilding.server.workflow.model.RtsWorkflowType;
 
 import cpw.mods.fml.common.network.ByteBufUtils;
 import cpw.mods.fml.common.network.simpleimpl.IMessage;
@@ -127,26 +133,30 @@ public class C2SRtsUltimineMessage implements IMessage {
             EntityPlayerMP player = ctx.getServerHandler().playerEntity;
             if (player == null) return null;
 
-            if (!RtsCameraManager.isActive(player)) return null;
-
-            if (!RtsProgressionManager.canUse(player, RtsFeature.ULTIMINE)) {
-                return null;
-            }
-
-            World world = player.worldObj;
             int seedX = msg.posX, seedY = msg.posY, seedZ = msg.posZ;
-
-            if (!world.blockExists(seedX, seedY, seedZ)) return null;
-            Block seedBlock = world.getBlock(seedX, seedY, seedZ);
-            if (seedBlock == null || world.isAirBlock(seedX, seedY, seedZ)) return null;
-
             int clampedLimit = Math.min(Math.max(1, msg.limit), 256);
             int cap = Math.min(clampedLimit, RtsProgressionManager.getUltimineLimit(player));
-
             int slot = Math.max(0, Math.min(msg.toolSlot, 8));
 
-            // 委托给 RtsMineManager 的渐进式连锁挖掘状态机
-            RtsMineManager.startUltimine(
+            if (PipelineRegistry.has(RtsWorkflowType.ULTIMINE)) {
+                Map<String, Object> args = new HashMap<String, Object>();
+                args.put(MiningExecutePipe.KEY_X.name(), Integer.valueOf(seedX));
+                args.put(MiningExecutePipe.KEY_Y.name(), Integer.valueOf(seedY));
+                args.put(MiningExecutePipe.KEY_Z.name(), Integer.valueOf(seedZ));
+                args.put(MiningExecutePipe.KEY_FACE.name(), Byte.valueOf(msg.face));
+                args.put(MiningExecutePipe.KEY_TOOL_SLOT.name(), Byte.valueOf((byte) slot));
+                args.put(MiningExecutePipe.KEY_TOOL_ITEM_ID.name(), msg.toolItemId);
+                args.put(MiningExecutePipe.KEY_TOOL_PROTOTYPE.name(), msg.toolPrototype);
+                args.put(UltimineExecutePipe.KEY_LIMIT.name(), Integer.valueOf(cap));
+                args.put(UltimineExecutePipe.KEY_MODE.name(), Byte.valueOf(msg.mode));
+                @SuppressWarnings("unchecked")
+                WorkflowPipeline<PipelineContext> pipeline = (WorkflowPipeline<PipelineContext>) PipelineRegistry
+                    .get(RtsWorkflowType.ULTIMINE);
+                PipelineResult result = pipeline.execute(new PipelineContext(player, args));
+                if (!(result instanceof PipelineResult.Failure)) return null;
+            }
+
+            RtsMineManager.startUltimineDirect(
                 player,
                 seedX,
                 seedY,

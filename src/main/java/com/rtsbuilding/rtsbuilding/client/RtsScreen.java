@@ -14,14 +14,17 @@ import com.rtsbuilding.rtsbuilding.client.panel.BlueprintPanel;
 import com.rtsbuilding.rtsbuilding.client.panel.GearMenuPanel;
 import com.rtsbuilding.rtsbuilding.client.panel.IRtsPanel;
 import com.rtsbuilding.rtsbuilding.client.panel.RtsBottomPanel;
+import com.rtsbuilding.rtsbuilding.client.panel.RtsResumePlacementPanel;
 import com.rtsbuilding.rtsbuilding.client.panel.RtsTopBarPanel;
 import com.rtsbuilding.rtsbuilding.client.panel.RtsWindowPanel;
 import com.rtsbuilding.rtsbuilding.client.panel.funnel.FunnelPanel;
+import com.rtsbuilding.rtsbuilding.client.panel.guide.GuidePanel;
 import com.rtsbuilding.rtsbuilding.client.panel.quickbuild.QuickBuildPanel;
 import com.rtsbuilding.rtsbuilding.client.panel.storage.RecentGridView;
 import com.rtsbuilding.rtsbuilding.client.panel.storage.StorageCategoryView;
 import com.rtsbuilding.rtsbuilding.client.panel.storage.StorageGridView;
 import com.rtsbuilding.rtsbuilding.client.panel.ultimine.UltiminePanel;
+import com.rtsbuilding.rtsbuilding.client.panel.workflow.RtsWorkflowPanel;
 import com.rtsbuilding.rtsbuilding.client.popup.CraftFeedbackPopup;
 import com.rtsbuilding.rtsbuilding.client.popup.CraftQuantityDialog;
 import com.rtsbuilding.rtsbuilding.entity.RtsCameraEntity;
@@ -64,6 +67,9 @@ public class RtsScreen extends GuiScreen {
     private final QuickBuildPanel quickBuildPanel;
     private final UltiminePanel ultiminePanel;
     private final FunnelPanel funnelPanel;
+    private final RtsWorkflowPanel workflowPanel;
+    private final RtsResumePlacementPanel resumePanel;
+    private final GuidePanel guidePanel;
 
     /** 上一次请求的页面，用于翻页时重新请求 */
     private int lastRequestedPage = -1;
@@ -98,6 +104,9 @@ public class RtsScreen extends GuiScreen {
         this.quickBuildPanel = new QuickBuildPanel();
         this.ultiminePanel = new UltiminePanel();
         this.funnelPanel = new FunnelPanel();
+        this.workflowPanel = new RtsWorkflowPanel();
+        this.resumePanel = new RtsResumePlacementPanel();
+        this.guidePanel = new GuidePanel();
     }
 
     @Override
@@ -307,6 +316,12 @@ public class RtsScreen extends GuiScreen {
             }
         }
 
+        // 第七阶段：渲染工作流面板、恢复放置面板、引导面板
+        workflowPanel.draw(mc, width - 190, 56);
+        resumePanel.setPosition(width / 2 - 100, height / 2 - 40);
+        resumePanel.draw(mc);
+        guidePanel.draw(mc, width / 2 - 150, height / 2 - 90);
+
         GL11.glPopMatrix();
     }
 
@@ -356,6 +371,11 @@ public class RtsScreen extends GuiScreen {
         if (inputRouter.dispatchClick(scaledX, scaledY, button)) {
             return;
         }
+
+        // 第七阶段：委托工作流/恢复放置/引导面板点击
+        workflowPanel.mouseClicked(scaledX, scaledY, width - 190, 56);
+        resumePanel.mouseClicked(scaledX, scaledY);
+        guidePanel.mouseClicked(scaledX, scaledY, width / 2 - 150, height / 2 - 90);
 
         // 世界交互穿透
         if (isWorldArea(scaledX, scaledY) && state.camera.isActive) {

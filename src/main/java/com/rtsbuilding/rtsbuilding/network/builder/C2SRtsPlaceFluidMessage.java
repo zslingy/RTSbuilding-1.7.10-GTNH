@@ -1,5 +1,13 @@
 package com.rtsbuilding.rtsbuilding.network.builder;
 
+import net.minecraft.block.Block;
+import net.minecraft.entity.player.EntityPlayerMP;
+import net.minecraftforge.fluids.BlockFluidBase;
+import net.minecraftforge.fluids.Fluid;
+import net.minecraftforge.fluids.FluidRegistry;
+
+import com.rtsbuilding.rtsbuilding.server.RtsStorageManager;
+
 import cpw.mods.fml.common.network.simpleimpl.IMessage;
 import cpw.mods.fml.common.network.simpleimpl.IMessageHandler;
 import cpw.mods.fml.common.network.simpleimpl.MessageContext;
@@ -153,7 +161,55 @@ public class C2SRtsPlaceFluidMessage implements IMessage {
     public static class Handler implements IMessageHandler<C2SRtsPlaceFluidMessage, IMessage> {
 
         @Override
-        public IMessage onMessage(C2SRtsPlaceFluidMessage msg, MessageContext ctx) {
+        public IMessage onMessage(C2SRtsPlaceFluidMessage m, MessageContext c) {
+            EntityPlayerMP player = c.getServerHandler().playerEntity;
+            if (player == null) return null;
+
+            Fluid fluid = FluidRegistry.getFluid(m.fluidId);
+            if (fluid == null) return null;
+
+            Block fluidBlock = fluid.getBlock();
+            if (fluidBlock == null) return null;
+
+            int targetX = m.clickedX;
+            int targetY = m.clickedY;
+            int targetZ = m.clickedZ;
+
+            switch (m.face) {
+                case 0:
+                    targetY--;
+                    break;
+                case 1:
+                    targetY++;
+                    break;
+                case 2:
+                    targetZ--;
+                    break;
+                case 3:
+                    targetZ++;
+                    break;
+                case 4:
+                    targetX--;
+                    break;
+                case 5:
+                    targetX++;
+                    break;
+                default:
+                    break;
+            }
+
+            Block existing = player.worldObj.getBlock(targetX, targetY, targetZ);
+            if (!m.forcePlace && !existing.isAir(player.worldObj, targetX, targetY, targetZ)) {
+                return null;
+            }
+
+            String fluidContainerId = fluidBlock.getUnlocalizedName();
+            if (RtsStorageManager.tryConsumeBlock(player, fluidContainerId, 0, 1)) {
+                int meta = fluidBlock instanceof BlockFluidBase ? ((BlockFluidBase) fluidBlock).getMaxRenderHeightMeta()
+                    : 0;
+                player.worldObj.setBlock(targetX, targetY, targetZ, fluidBlock, meta, 3);
+                RtsStorageManager.sendStoragePage(player, 0, 0);
+            }
             return null;
         }
     }

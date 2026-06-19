@@ -50,6 +50,8 @@ public class S2CRtsPlaceAnimationMessage implements IMessage {
         @Override
         @SideOnly(Side.CLIENT)
         public IMessage onMessage(S2CRtsPlaceAnimationMessage msg, MessageContext ctx) {
+            com.rtsbuilding.rtsbuilding.client.render.AnimationRenderer
+                .addPlace(msg.getPosX(), msg.getPosY(), msg.getPosZ());
             return null;
         }
     }

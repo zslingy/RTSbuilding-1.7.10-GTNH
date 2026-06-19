@@ -64,7 +64,22 @@ public class S2CRtsQuestDetectStatusMessage implements IMessage {
         @Override
         @SideOnly(Side.CLIENT)
         public IMessage onMessage(S2CRtsQuestDetectStatusMessage msg, MessageContext ctx) {
-            return null; // stub — stage 4
+            net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getMinecraft();
+            if (mc.thePlayer == null) return null;
+            com.rtsbuilding.rtsbuilding.client.ProgressionViewModel vm = com.rtsbuilding.rtsbuilding.client.RtsClientState
+                .get().progression;
+            vm.questDetectPhase = msg.getPhase();
+            vm.questDetectScanned = msg.getScannedTasks();
+            vm.questDetectTotal = msg.getTotalTasks();
+            vm.questDetectCompleted = msg.getCompletedTasks();
+            if (msg.getPhase() == PHASE_COMPLETE) {
+                mc.thePlayer.addChatMessage(
+                    new net.minecraft.util.ChatComponentText(
+                        "Quest detection complete: " + msg.getCompletedTasks() + "/" + msg.getTotalTasks() + " tasks"));
+            } else if (msg.getPhase() == PHASE_ERROR) {
+                mc.thePlayer.addChatMessage(new net.minecraft.util.ChatComponentText("Quest detection failed"));
+            }
+            return null;
         }
     }
 }

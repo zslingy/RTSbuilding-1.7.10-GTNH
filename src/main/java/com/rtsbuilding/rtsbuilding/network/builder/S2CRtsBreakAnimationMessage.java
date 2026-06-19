@@ -50,6 +50,8 @@ public class S2CRtsBreakAnimationMessage implements IMessage {
         @Override
         @SideOnly(Side.CLIENT)
         public IMessage onMessage(S2CRtsBreakAnimationMessage msg, MessageContext ctx) {
+            com.rtsbuilding.rtsbuilding.client.render.AnimationRenderer
+                .addBreak(msg.getPosX(), msg.getPosY(), msg.getPosZ());
             return null;
         }
     }

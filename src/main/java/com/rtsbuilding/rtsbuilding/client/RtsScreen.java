@@ -184,6 +184,9 @@ public class RtsScreen extends GuiScreen {
         if (!state.camera.isActive) return;
         super.updateScreen();
 
+        // 搜索框光标闪烁更新
+        bottomPanel.updateSearchCursor();
+
         // Bug5修复：计算帧时间差（平滑镜头模式下用于帧率无关的移动插值）
         float cameraTickDelta = 1.0f;
         if (state.interaction.smoothCamera) {
@@ -290,15 +293,15 @@ public class RtsScreen extends GuiScreen {
     @Override
     public void drawScreen(int mouseX, int mouseY, float partialTicks) {
         if (mc.currentScreen != this) return;
-        drawRect(0, 0, this.width, 54, 0xC0101116);
+        drawRect(0, 0, this.width, 52, 0xC0101116);
 
         // 重置帧级状态
         state.resetAllFrameStates();
         inputRouter.resetAllFrames();
 
         // ---- 计算世界区域（顶部栏下方到底部面板上方） ----
-        worldAreaTop = 54;
-        worldAreaBottom = Math.max(54, bottomPanel.getPanelY());
+        worldAreaTop = 52;
+        worldAreaBottom = Math.max(52, bottomPanel.getPanelY());
 
         // ---- 阶段6: UI 缩放 ----
         float zoom = state.uiZoom;
@@ -345,6 +348,8 @@ public class RtsScreen extends GuiScreen {
 
             // 先尝试面板消费
             if (inputRouter.dispatchClick(scaledX, scaledY, button)) {
+                // 浮动窗口点击置顶
+                bringClickedWindowToFront(scaledX, scaledY);
                 return;
             }
 
@@ -369,6 +374,10 @@ public class RtsScreen extends GuiScreen {
 
         // 先尝试面板消费
         if (inputRouter.dispatchClick(scaledX, scaledY, button)) {
+            // 浮动窗口点击置顶
+            if (button == 0) {
+                bringClickedWindowToFront(scaledX, scaledY);
+            }
             return;
         }
 
@@ -608,21 +617,38 @@ public class RtsScreen extends GuiScreen {
         return funnelPanel;
     }
 
-    /** Bug2修复：向所有窗口面板分发拖拽/释放事件 */
+    /** 向所有窗口面板分发拖拽/释放事件（z序感知：仅分发到最上层被拖拽窗口） */
     private void dispatchWindowPanelDrag() {
         float invZoom = 1.0f / state.uiZoom;
         int scaledX = (int) ((Mouse.getX() * width / mc.displayWidth) * invZoom);
         int scaledY = (int) ((height - Mouse.getY() * height / mc.displayHeight - 1) * invZoom);
         boolean leftDown = Mouse.isButtonDown(0);
 
-        for (IRtsPanel panel : panels.values()) {
+        // 从上层到下层查找第一个真正在拖拽的窗口
+        for (int i = panels.size() - 1; i >= 0; i--) {
+            IRtsPanel panel = panels.values()
+                .toArray(new IRtsPanel[0])[i];
             if (panel instanceof RtsWindowPanel) {
                 RtsWindowPanel win = (RtsWindowPanel) panel;
                 if (leftDown) {
-                    win.mouseDragged(scaledX, scaledY);
+                    if (win.mouseDragged(scaledX, scaledY)) {
+                        return; // 仅处理最上层拖拽窗口
+                    }
                 } else {
                     win.mouseReleased(scaledX, scaledY);
                 }
+            }
+        }
+    }
+
+    /** 将点击位置下的浮动窗口移到最上层 */
+    private void bringClickedWindowToFront(int mouseX, int mouseY) {
+        for (IRtsPanel panel : panels.values()) {
+            if (panel instanceof RtsWindowPanel && panel.isVisible()
+                && panel.getBounds()
+                    .contains(mouseX, mouseY)) {
+                inputRouter.bringToFront(panel.panelName());
+                break;
             }
         }
     }

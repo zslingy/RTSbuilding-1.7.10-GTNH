@@ -144,7 +144,7 @@ public class S2CRtsCameraStateMessage implements IMessage {
                 // 更新 ViewModel
                 camera.isActive = true;
                 camera.posX = msg.getAnchorX();
-                camera.posY = msg.getAnchorY();
+                camera.posY = msg.getAnchorY() + msg.getHeightOffset();
                 camera.posZ = msg.getAnchorZ();
                 camera.rotationYaw = msg.getYawDeg();
                 camera.rotationPitch = msg.getPitchDeg();

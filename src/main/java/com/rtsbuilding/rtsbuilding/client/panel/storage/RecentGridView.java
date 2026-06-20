@@ -67,7 +67,6 @@ public class RecentGridView implements IRtsPanel {
         int count = Math.min(ivm.recentBlocks.size(), InteractionViewModel.MAX_RECENT_BLOCKS);
         if (count == 0) return;
 
-        // Bug4修复: 从 RtsBottomPanel 获取坐标
         RtsBottomPanel bp = findBottomPanel(screen);
         if (bp != null) {
             recentX = bp.getRecentX();
@@ -79,14 +78,17 @@ public class RecentGridView implements IRtsPanel {
             recentW = count * SLOT_SIZE;
         }
 
+        // 自适应列数
+        int cols = Math.max(1, recentW / SLOT_SIZE);
+
         // 标签
         String label = "Recent";
         fr.drawString(label, recentX, recentY - 10, 0xFFAAAAAA);
 
         for (int i = 0; i < count; i++) {
-            int col = i % COLS;
-            int row = i / COLS;
-            if (row >= ROWS_COUNT) break;
+            int col = i % cols;
+            int row = i / cols;
+            if (row >= 2) break;
             int sx = recentX + col * SLOT_SIZE;
             int sy = recentY + row * SLOT_SIZE;
 
@@ -113,10 +115,11 @@ public class RecentGridView implements IRtsPanel {
         if (button != 0 && button != 1) return false;
 
         InteractionViewModel ivm = state.interaction;
+        int cols = Math.max(1, recentW / SLOT_SIZE);
         int col = (mouseX - recentX) / SLOT_SIZE;
         int row = (mouseY - recentY) / SLOT_SIZE;
-        int index = row * COLS + col;
-        if (col >= 0 && col < COLS && row >= 0 && row < ROWS_COUNT && index >= 0 && index < ivm.recentBlocks.size()) {
+        int index = row * cols + col;
+        if (col >= 0 && col < cols && row >= 0 && row < 2 && index >= 0 && index < ivm.recentBlocks.size()) {
             String blockId = ivm.recentBlocks.get(index);
             state.interaction.selectedBlockId = blockId;
             state.interaction.selectedBlockMeta = 0;

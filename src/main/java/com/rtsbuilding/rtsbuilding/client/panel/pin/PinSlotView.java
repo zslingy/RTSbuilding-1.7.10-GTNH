@@ -27,6 +27,10 @@ import cpw.mods.fml.common.registry.GameData;
  */
 public class PinSlotView implements IRtsPanel {
 
+    public static int getMaxPins() {
+        return MAX_PINS;
+    }
+
     private static final String PANEL_NAME = "pin_slots";
     private static final int MAX_PINS = 8;
     private static final int SLOT_SIZE = 10;
@@ -150,6 +154,25 @@ public class PinSlotView implements IRtsPanel {
     @Override
     public void resetFrameState() {
         hoveredPin = -1;
+    }
+
+    /** 检查指定钉选槽位是否有物品（供 RtsBottomPanel 分页器使用） */
+    public boolean hasItem(int index) {
+        return index >= 0 && index < MAX_PINS && pinnedItemIds[index] != null && !pinnedItemIds[index].isEmpty();
+    }
+
+    /** 获取指定钉选槽位的 ItemStack（供 RtsBottomPanel 分页器使用） */
+    public ItemStack getStack(int index) {
+        if (!hasItem(index)) return null;
+        return resolveStack(pinnedItemIds[index], pinnedItemMetas[index]);
+    }
+
+    /** 将物品钉选到指定槽位（供 RtsBottomPanel 右键钉选使用） */
+    public void pinItem(int index, String itemId, int meta) {
+        if (index >= 0 && index < MAX_PINS) {
+            pinnedItemIds[index] = itemId;
+            pinnedItemMetas[index] = meta;
+        }
     }
 
     private ItemStack resolveStack(String itemId, int meta) {

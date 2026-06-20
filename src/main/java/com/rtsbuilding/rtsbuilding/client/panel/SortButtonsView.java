@@ -166,7 +166,7 @@ public class SortButtonsView {
     }
 
     private void adjustHeight(int direction) {
-        int newH = state.storage.panelHeight + direction * 11;
+        int newH = state.storage.panelHeight + direction * 22;
         newH = Math.max(StorageViewModel.MIN_PANEL_H, Math.min(StorageViewModel.MAX_PANEL_H, newH));
         state.storage.panelHeight = newH;
     }

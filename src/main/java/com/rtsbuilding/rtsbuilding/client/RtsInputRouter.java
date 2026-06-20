@@ -36,6 +36,22 @@ public class RtsInputRouter {
     }
 
     /**
+     * 将指定面板移到最上层（列表末尾）。
+     * 用于浮动窗口点击置顶。
+     */
+    public void bringToFront(String panelName) {
+        for (int i = 0; i < panels.size(); i++) {
+            if (panels.get(i)
+                .panelName()
+                .equals(panelName)) {
+                IRtsPanel panel = panels.remove(i);
+                panels.add(panel);
+                return;
+            }
+        }
+    }
+
+    /**
      * 分发鼠标点击事件。
      * 从上层到底层遍历面板，第一个 hit-test 通过并消费的面板获胜。
      * 
